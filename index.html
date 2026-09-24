@@ -9,6 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -354,10 +356,10 @@ function renderControls(){
   <fieldset><legend>② Cover page — exact sample layout</legend>
     <label>Top banner image (wide hero behind card)</label>
     <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.banner=v)">
-    ${S.cover.banner?`<img src="${S.cover.banner}" class="thumb">`:``}
+    ${S.cover.banner?`<img src="${S.cover.banner}" class="thumb"><button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="openCropFor('cover',0,'banner', 4.2)">✂️ Adjust frame (banner)</button>`:``}
     <label>Feature image (top-right inside card)</label>
     <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.feature=v)">
-    ${S.cover.feature?`<img src="${S.cover.feature}" class="thumb">`:``}
+    ${S.cover.feature?`<img src="${S.cover.feature}" class="thumb"><button class="btn btn-ghost btn-small" style="margin-top:6px" onclick="openCropFor('cover',0,'feature', 1.48)">✂️ Adjust frame</button>`:``}
     <label>Decorative graphic / icon for cover (optional, per-page element)</label>
     <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.graphic=v)">
     ${S.cover.graphic?`<img src="${S.cover.graphic}" style="max-height:46px;margin-top:6px">`:``}
@@ -372,7 +374,7 @@ function renderControls(){
       <div class="block">
         <label>Tile ${i+1} label</label><input type="text" value="${u.label}" oninput="S.updates[${i}].label=this.value;render()">
         <label>Tile ${i+1} image — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.updates[${i}].img=v)">
-        ${u.img?`<img src="${u.img}" class="thumb" style="height:72px">`:``}
+        ${u.img?`<img src="${u.img}" class="thumb" style="height:72px"><button class="btn btn-ghost btn-small" style="margin-top:4px" onclick="openCropFor('updates',${i},'img', 1.9)">✂️ Frame</button>`:``}
         <label>Caption</label><textarea oninput="S.updates[${i}].cap=this.value;render()">${u.cap}</textarea>
       </div>
     `).join('')}
@@ -389,8 +391,8 @@ function renderControls(){
         <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:12px">Event ${i+1}</b><button class="btn btn-danger btn-small" onclick="S.events.splice(${i},1);render()">Remove</button></div>
         <label>Title</label><input type="text" value="${e.title}" oninput="S.events[${i}].title=this.value;render()">
         <label>Summary / body</label><textarea oninput="S.events[${i}].body=this.value;render()">${e.body}</textarea>
-        <div class="row2"><div><label>Image 1</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img1=v)">${e.img1?`<img src="${e.img1}" class="thumb" style="height:78px">`:``}</div>
-        <div><label>Image 2 (wide, optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img2=v)">${e.img2?`<img src="${e.img2}" class="thumb" style="height:78px">`:``}</div></div>
+        <div class="row2"><div><label>Image 1</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img1=v)">${e.img1?`<img src="${e.img1}" class="thumb" style="height:78px"><button class="btn btn-ghost btn-small" style="margin-top:4px" onclick="openCropFor('event',${i},'img1', 1.39)">✂️ Frame</button>`:``}</div>
+        <div><label>Image 2 (wide, optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img2=v)">${e.img2?`<img src="${e.img2}" class="thumb" style="height:78px"><button class="btn btn-ghost btn-small" style="margin-top:4px" onclick="openCropFor('event',${i},'img2', 2.59)">✂️ Frame</button>`:``}</div></div>
         <label>Icon / element / graphic for THIS event page (optional)</label>
         <input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].icon=v)">
         ${e.icon?`<img src="${e.icon}" style="max-height:40px;margin-top:6px">`:``}
@@ -409,7 +411,7 @@ function renderControls(){
     </div>
     <label>Name</label><input type="text" value="${S.volunteer.name}" oninput="S.volunteer.name=this.value;render()">
     <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.photo=v)">
-    ${S.volunteer.photo?`<img src="${S.volunteer.photo}" class="thumb-circle" style="margin-top:6px">`:``}
+    ${S.volunteer.photo?`<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><img src="${S.volunteer.photo}" class="thumb-circle"><button class="btn btn-ghost btn-small" onclick="openCropFor('volunteer',0,'photo', 1)">✂️ Adjust frame</button></div>`:``}
     <label>Bio / journey</label><textarea oninput="S.volunteer.bio=this.value;render()">${S.volunteer.bio}</textarea>
     <label>Why we're spotlighting them (highlight box)</label><textarea oninput="S.volunteer.note=this.value;render()">${S.volunteer.note}</textarea>
     <label>Icon / graphic for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.icon=v)">
@@ -423,7 +425,7 @@ function renderControls(){
     </div>
     <label>Name</label><input type="text" value="${S.impact.name}" oninput="S.impact.name=this.value;render()">
     <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.photo=v)">
-    ${S.impact.photo?`<img src="${S.impact.photo}" class="thumb-circle" style="margin-top:6px">`:``}
+    ${S.impact.photo?`<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><img src="${S.impact.photo}" class="thumb-circle"><button class="btn btn-ghost btn-small" onclick="openCropFor('impact',0,'photo', 1)">✂️ Adjust frame</button></div>`:``}
     <label>Story text</label><textarea oninput="S.impact.story=this.value;render()">${S.impact.story}</textarea>
     <label>Decorative graphic / icon for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.graphic=v)">
     ${S.impact.graphic?`<img src="${S.impact.graphic}" style="max-height:46px;margin-top:6px">`:``}
@@ -445,7 +447,7 @@ function renderControls(){
     <label>Mission</label><textarea oninput="S.closing.mission=this.value;render()">${S.closing.mission}</textarea>
     <label>Vision</label><textarea oninput="S.closing.vision=this.value;render()">${S.closing.vision}</textarea>
     <label>Logo / graphic (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.closing.logo=v)">
-    ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-top:6px">`:``}
+    ${S.closing.logo?`<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><img src="${S.closing.logo}" style="max-height:44px"><button class="btn btn-ghost btn-small" onclick="openCropFor('closing',0,'logo', 1.67)">✂️ Frame</button></div>`:``}
     <div class="row2"><div><label>Website</label><input type="text" value="${S.closing.website}" oninput="S.closing.website=this.value;render()"></div><div><label>Email</label><input type="text" value="${S.closing.email}" oninput="S.closing.email=this.value;render()"></div></div>
     <label>Phone</label><input type="text" value="${S.closing.phone}" oninput="S.closing.phone=this.value;render()">
     <label>Social handle</label><input type="text" value="${S.closing.social}" oninput="S.closing.social=this.value;render()">
@@ -736,9 +738,83 @@ function loadJSON(input){
   const r=new FileReader(); r.onload=()=>{ try{ Object.assign(S, JSON.parse(r.result)); render(); }catch(e){ alert('Invalid JSON'); } }; r.readAsText(f);
 }
 
+
+let _cropper=null, _cropCb=null;
+function openCrop(src, cb, aspect){
+  _cropCb=cb;
+  const modal=document.getElementById('cropModal');
+  const img=document.getElementById('cropImg');
+  img.src=src;
+  modal.style.display='flex';
+  setTimeout(()=>{
+    if(_cropper) _cropper.destroy();
+    _cropper=new Cropper(img, {viewMode:1, autoCropArea:0.9, background:false, movable:true, zoomable:true, rotatable:false, scalable:false, aspectRatio: aspect||NaN});
+    document.getElementById('cropZoom').value=1;
+  }, 80);
+}
+function closeCrop(){ document.getElementById('cropModal').style.display='none'; if(_cropper){ _cropper.destroy(); _cropper=null; } _cropCb=null; }
+function cropReset(){ if(_cropper) _cropper.reset(); document.getElementById('cropZoom').value=1; }
+function cropAspect(r){ if(_cropper) _cropper.setAspectRatio(r); }
+function cropSave(){
+  if(!_cropper||!_cropCb) return closeCrop();
+  const canvas=_cropper.getCroppedCanvas({maxWidth:1600, maxHeight:1600, imageSmoothingQuality:'high'});
+  const data=canvas.toDataURL('image/jpeg', 0.92);
+  _cropCb(data);
+  closeCrop();
+  render();
+}
+function openCropFor(kind, idx, field, aspect){
+  let src="";
+  if(kind==='cover') src=S.cover[field];
+  else if(kind==='updates') src=S.updates[idx][field];
+  else if(kind==='event') src=S.events[idx][field];
+  else if(kind==='volunteer') src=S.volunteer[field];
+  else if(kind==='impact') src=S.impact[field];
+  else if(kind==='closing') src=S.closing[field];
+  if(!src){ alert('Upload an image first, then adjust its frame.'); return; }
+  openCrop(src, (data)=>{
+    if(kind==='cover') S.cover[field]=data;
+    else if(kind==='updates') S.updates[idx][field]=data;
+    else if(kind==='event') S.events[idx][field]=data;
+    else if(kind==='volunteer') S.volunteer[field]=data;
+    else if(kind==='impact') S.impact[field]=data;
+    else if(kind==='closing') S.closing[field]=data;
+    logAuto && logAuto('✂️ Frame adjusted for '+kind+' '+(field||''));
+  }, aspect);
+}
+// Also after any fileToData, offer quick adjust: patch fileToData to store last src for quick crop
+const _origFileToData=fileToData;
+fileToData=function(input, cb){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ cb(r.result, f.name); // after cb, we already rendered
+    // optional: auto-open crop? not auto, let user click Adjust frame
+  }; r.readAsDataURL(f);
+};
+
 // init
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 render();
 </script>
+
+<!-- Cropper modal for adjusting image frame -->
+<div id="cropModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;padding:14px;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;gap:10px;width:720px">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Montserrat,sans-serif">Adjust image frame — drag to pan, scroll/wheel to zoom</b><button class="btn btn-ghost btn-small" onclick="closeCrop()">✕ Close</button></div>
+    <div style="flex:1;min-height:260px;max-height:62vh;background:#0f1a14;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px"><img id="cropImg" style="max-width:100%;display:block"></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label style="margin:0">Zoom</label><input type="range" id="cropZoom" min="0.2" max="3" step="0.05" value="1" style="flex:1" oninput="if(window._cropper) window._cropper.zoomTo(this.value)">
+      <button class="btn btn-ghost btn-small" onclick="cropReset()">Reset</button>
+      <button class="btn btn-ghost btn-small" onclick="cropAspect(0)">Free</button>
+      <button class="btn btn-ghost btn-small" onclick="cropAspect(1)">1:1</button>
+      <button class="btn btn-ghost btn-small" onclick="cropAspect(16/9)">16:9</button>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="cropSave()">✓ Save frame</button>
+      <button class="btn btn-ghost" style="flex:1" onclick="closeCrop()">Cancel</button>
+    </div>
+    <small class="hint">The saved frame is exactly what appears in the newsletter (cover/banner/tiles/events). Works for any uploaded or auto-filled image.</small>
+  </div>
+</div>
+
 </body>
 </html>
