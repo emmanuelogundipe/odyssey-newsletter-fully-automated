@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: odyssey-newsletter-system
+    name: odyssey-newsletter-fully-automated
     env: static
     plan: free
     buildCommand: ""
@@ -15,5 +15,5 @@ services:
         value: public, max-age=3600
     # If your Render account uses `static_site` type, replace the block above with:
     # - type: pserv
-    #   name: odyssey-newsletter-system
+    #   name: odyssey-newsletter-fully-automated
     #   env: static
