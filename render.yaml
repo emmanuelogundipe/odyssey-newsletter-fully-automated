@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: odyssey-newsletter-system
+    env: static
+    plan: free
+    buildCommand: ""
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=3600
+    # If your Render account uses `static_site` type, replace the block above with:
+    # - type: pserv
+    #   name: odyssey-newsletter-system
+    #   env: static

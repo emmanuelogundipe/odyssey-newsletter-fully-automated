@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Odyssey Educational Foundation — Automated Newsletter System</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --green:#3EAE5B; --green-dark:#2d8a46;
+  --orange:#F5822A; --orange-dark:#e06e15;
+  --blue:#BFE4F7; --blue-mid:#A8D8F0; --light:#EAF6FD; --light2:#DDEFFB;
+  --ink:#14261b; --muted:#5a6b62;
+  --card-border:#F5822A;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:'Inter',system-ui,Segoe UI,Arial,sans-serif;background:#eef3f6;color:var(--ink);}
+header.top{background:var(--green);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+header.top h1{margin:0;font-family:Montserrat,sans-serif;font-size:18px;letter-spacing:.2px}
+header.top p{margin:3px 0 0;font-size:12.5px;opacity:.92}
+.badge-live{background:#fff;color:var(--green);padding:6px 10px;border-radius:999px;font-weight:800;font-size:11px}
+.layout{display:flex;min-height:calc(100vh - 70px)}
+.left{width:480px;min-width:360px;max-width:520px;background:#fff;border-right:2px solid #e6ecef;overflow-y:auto;height:calc(100vh - 70px);padding:18px 18px 30px}
+.right{flex:1;overflow-y:auto;height:calc(100vh - 70px);background:#d7e6eb;padding:22px}
+fieldset{border:1px solid #e2e8ea;border-radius:12px;margin:0 0 16px;padding:14px 14px 12px;background:#fff}
+legend{font-weight:800;color:var(--green);padding:0 8px;font-size:12.5px;letter-spacing:.3px;text-transform:uppercase}
+label{display:block;font-size:11.5px;font-weight:700;margin:9px 0 4px;color:#2a3a32}
+input[type=text],input[type=url],input[type=month],select,textarea{width:100%;padding:8px 10px;border:1px solid #cfd8dc;border-radius:8px;font-size:12.5px;font-family:inherit;background:#fbfcfd}
+textarea{resize:vertical;min-height:64px}
+input[type=file]{width:100%;font-size:11.5px}
+.hint{color:#6b7c75;font-size:11px;margin-top:4px;display:block;line-height:1.4}
+.row2{display:flex;gap:10px}.row2>div{flex:1}
+.btn{border:none;border-radius:8px;padding:9px 12px;font-weight:800;font-size:12px;cursor:pointer}
+.btn-primary{background:var(--orange);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-ghost{background:#fff;border:1px solid #cbd5d1;color:#24352e}
+.btn-small{padding:6px 10px;font-size:11px}
+.btn-danger{background:#d64545;color:#fff}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+.actions .btn{flex:1;min-width:140px}
+.block{border:1px dashed #c3cfca;border-radius:10px;padding:10px;margin-top:10px;background:#f9fcfb}
+.drop{border:1.5px dashed #8bbfa8;border-radius:10px;padding:12px;text-align:center;background:#f4faf7;cursor:pointer}
+.drop.drag{border-color:var(--orange);background:#fff6ef}
+.thumb{width:100%;height:90px;object-fit:cover;border-radius:8px;border:1px solid #e0e7e4;display:block;margin-top:6px}
+.thumb-circle{width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)}
+.sep{height:1px;background:#e8eeee;margin:12px 0}
+.kv{display:flex;justify-content:space-between;font-size:11px;color:#5a6b62}
+.color-row{display:flex;gap:8px;align-items:center;margin-top:6px}
+.color-row input[type=color]{width:36px;height:30px;padding:0;border:none;background:none}
+.tabs{display:flex;gap:6px;margin:8px 0}
+.tabs button{flex:1;padding:7px;border-radius:8px;border:1px solid #dfe8e3;background:#f5f8f7;font-weight:700;font-size:11px;cursor:pointer}
+.tabs button.active{background:var(--green);color:#fff;border-color:var(--green)}
+
+/* Preview */
+.preview-label{font-size:11px;font-weight:800;color:#3a4a44;letter-spacing:.6px;margin:6px 0 10px;text-align:center;text-transform:uppercase}
+.page{width:540px;max-width:100%;margin:0 auto 22px;background:var(--blue);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.13);overflow:hidden;position:relative}
+.page .bar{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800}
+.page .bar.green{background:var(--green)} .page .bar.orange{background:var(--orange)} .page .bar.sky{background:#4FA6D8}
+.page .bar b{font-family:Montserrat,sans-serif;font-size:13px}
+.page .bar span{font-size:11.5px;opacity:.95}
+.page .content{padding:14px}
+.card{background:var(--light);border:2px solid var(--orange);border-radius:16px;padding:14px}
+.cover-banner{width:100%;height:152px;object-fit:cover;display:block}
+.cover-card{margin:-34px 14px 0;background:#fff;border-radius:14px;padding:14px;position:relative;z-index:2;box-shadow:0 4px 10px rgba(0,0,0,.08)}
+.cover-card h2{margin:0 0 4px;font-family:Montserrat,sans-serif;color:var(--green);font-size:18px;line-height:1.1}
+.cover-meta{font-weight:800;color:#24352e;font-size:11px;letter-spacing:.4px}
+.cover-badge{color:var(--orange);font-weight:800;font-size:13px;margin:2px 0 8px}
+.cover-feature{width:100%;height:148px;object-fit:cover;border-radius:10px;border:3px solid var(--orange);display:block}
+.updates-pill{background:var(--green);color:#fff;text-align:center;padding:7px;border-radius:999px;font-weight:800;font-size:12px;margin:12px 0 10px}
+.tiles{display:flex;gap:8px}
+.tile{flex:1;background:var(--light2);border-radius:10px;overflow:hidden;text-align:center;padding:0 0 8px;border:1px solid #cfe6f3}
+.tile img{width:100%;height:72px;object-fit:cover;display:block}
+.tile .lbl{font-weight:800;font-size:11px;margin:6px 6px 2px}
+.tile .cap{font-size:9.5px;color:#33443d;margin:0 6px;line-height:1.3}
+.event-img{width:130px;height:92px;object-fit:cover;border-radius:10px;border:2px solid var(--orange);float:left;margin:0 10px 6px 0}
+.event-img-wide{width:100%;height:154px;object-fit:cover;border-radius:10px;margin-top:8px;border:1px solid #e0e7e4}
+.clear{clear:both}
+.spot{display:flex;gap:12px;align-items:flex-start}
+.opp{display:flex;flex-direction:column;gap:8px}
+.opp-item{background:var(--orange);color:#fff;padding:7px 10px;border-radius:8px;font-weight:800;font-size:11.5px}
+.opp-link{font-size:10.5px;color:#0b57d0;word-break:break-all;background:#fff;padding:6px 8px;border-radius:6px;border:1px solid #e6eef2}
+.footer-thanks{color:#fff;text-align:center;padding:10px 12px}
+.footer-contact{display:flex;justify-content:space-between;gap:8px;background:var(--orange);color:#fff;padding:8px 10px;font-size:10px;font-weight:700}
+.print-hide{display:block}
+@media print{
+  body *{visibility:hidden}
+  .right, .right *{visibility:visible}
+  .right{position:absolute;left:0;top:0;width:100%;height:auto;overflow:visible;background:#fff}
+  .left, header.top, .print-hide{display:none !important}
+  .page{box-shadow:none;break-inside:avoid;page-break-inside:avoid;margin:0 auto 10px}
+}
+
+.help{font-size:11px;background:#fff8ed;border:1px solid #ffdfb5;border-radius:8px;padding:10px;margin-top:8px;color:#5a3d0a}
+code.inline{background:#eef6f1;padding:1px 5px;border-radius:4px;font-size:11px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>🟢 Odyssey Educational Foundation — Newsletter Automation</h1>
+    <p>Upload once → preview live → export <b>PPTX (Canva-editable)</b> + PDF. Month auto-syncs on every page. Colours locked to sample.</p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span class="badge-live">● LIVE PREVIEW</span>
+    <button class="btn btn-ghost" onclick="document.getElementById('helpBox').scrollIntoView({behavior:'smooth'})">How to use Canva →</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT CONTROLS -->
+  <div class="left" id="controls"></div>
+
+  <!-- RIGHT PREVIEW -->
+  <div class="right">
+    <div class="preview-label">Live newsletter preview — exactly as PDF sample, with your content & images</div>
+    <div id="preview"></div>
+    <div id="helpBox" class="help" style="max-width:540px;margin:18px auto">
+      <b>How to open the export in Canva (editable):</b>
+      <ol style="margin:6px 0 6px 18px;line-height:1.5">
+        <li>Click <code class="inline">Export to Canva (.pptx)</code> on the left. A <b>.pptx</b> downloads.</li>
+        <li>Go to <a href="https://www.canva.com/" target="_blank">canva.com</a> → <b>Create a design → Import file</b> → select the .pptx.</li>
+        <li>Every text box, image, icon and colour block is now editable in Canva. Move, replace, or restyle anything.</li>
+        <li>Tip: keep the same A4 vertical layout (7.5 × 10 in) so nothing shifts when you import.</li>
+      </ol>
+      <div class="hint">PPTX is the native Canva-editable format. PDF export is for quick sharing/printing. If you use Canva Teams, you can also “Share → Brand Kit” to lock the green/orange/blue to your brand.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- State ----------
+const S = {
+  monthLabel: "August Edition",
+  year: "2026",
+  colors:{ green:"#3EAE5B", orange:"#F5822A", blue:"#BFE4F7", light:"#EAF6FD" },
+  cover:{
+    banner:"", feature:"",
+    headline:"Here's what has happened in the last month.",
+    sub:"MONTHLY NEWSLETTER",
+    intro:"In August, the Odyssey Educational Foundation was active in STEM activities, which included the Sensational Summer Take-Off program for students, providing web development and coding training for university interns. Additionally, the Foundation collaborated with the DroneHER aerial technology program for girls and advanced as a finalist in the international Mi-Hy MudTronics Championship with its TerraSense MFC project.",
+    graphic:""
+  },
+  updates:[
+    {label:"Events", img:"", cap:"These consist of all the events Odyssey educational foundation has had in the past month."},
+    {label:"Volunteer/Intern Spotlight", img:"", cap:"This comprises of the highlight of the most hardworking staff and intern in the organisation. NOTE: this is monthly."},
+    {label:"Stories of impact", img:"", cap:"We tell the stories that made the month more fun, and had impact on the students who attended the program."}
+  ],
+  events:[
+    {title:"Sensational Summer Take-Off Programme", body:"Some summer programmes end with a certificate. This one ended with a partnership. As the Sensational Summer Take-Off programme entered its concluding phase in August — with activities wrapping up in the first week of September, it earned an endorsement that speaks for itself: Ibom Air has agreed to come onboard for next year's edition. For a summer programme built on flight simulators, drones, and airport infrastructure, an airline choosing to back it isn't just validation — it's a sign the students were building something an industry recognised as real.\n\nOver the weeks, students didn't just learn about aviation and technology — they piloted drones, took the controls in flight simulators, and wired microcontroller-powered traffic and airport runway lights from scratch. In the workshop, robotics met craftsmanship: participants picked up woodworking tools and safety techniques to build the physical frames housing their own electronics, turning circuit boards into finished, functioning builds.", img1:"", img2:"", icon:"", graphic:""},
+    {title:"DroneHER Programme", body:"This program, organised by the Society of Women Engineers (SWE), in collaboration with Odyssey Educational Foundation, ran from 17 July to 19 August 2026, introduced 50 girls to drone technology. Participants received foundational and practical training in drone components, flight principles, safe operation, navigation and control. They also explored STEM careers, engaged in team challenges, and competed in DroneSoccer. An important element was awareness of SWE's global community and support for women in engineering.\n\nThe final showcase featured guest speakers from the aviation and engineering sectors, including representatives of the Permanent Secretary of Aviation and Aerospace and the President of APWEN. 100% of respondents reported learning a great deal about drones, 100% had the opportunity to control a drone, and 100% expressed interest in further drone, robotics, or STEM activities.", img1:"", img2:"", icon:"", graphic:""},
+    {title:"Mi-Hy MudTronics Competition", body:"Odyssey actively participated in and competed in the Mi-Hy MudTronics Championship, a global and collaborative competition spearheaded by the Mi-Hy research project. The initiative challenges makers, scientists, artists, and technologists worldwide to push the boundaries of bio-electrochemical system design by converting organic waste, mud, wastewater, and naturally occurring microbes into usable electrical energy via Microbial Fuel Cells (MFCs).\n\nCompeting alongside 37 innovative teams representing 21 countries across the globe, Odyssey's technical team designed and developed the TerraSense MFC. The TerraSense system utilizes local materials, carbon-based electrodes to generate low-voltage power. Overcoming the challenges of getting project materials, the team successfully advanced through the competitive preliminary evaluation rounds and have advanced to the final stage of the competition.", img1:"", img2:"", icon:"", graphic:""},
+    {title:"Pi Foundations Programme", body:"On 29th August 2026, six young minds walked into “Mastering the Basics of Raspberry Pi”, and walked out having built something real. This was hands-on from the first minute: participants unpacked the Raspberry Pi family of single-board computers, decoded GPIO pins, and connected the dots between IoT theory and components that make it work. Then came the centrepiece — wiring a temperature and humidity sensor directly to a Raspberry Pi and watching live readings appear on screen, built with their own hands.\n\nBy the end of the session, six participants had gone from \"what's a Raspberry Pi?\" to building functioning IoT circuits. And this is proof that the right hands-on approach turns curiosity into capability in a single afternoon. This month's version of the Raspberry Pi program was an effective one, and this is what access to hardware looks like when it's done right.", img1:"", img2:"", icon:"", graphic:""}
+  ],
+  volunteer:{ name:"MATTHAIS ILIYA ZAKKA", photo:"", bio:"Matthias's journey with Odyssey Educational Foundation started over a year ago as an intern, and it's since grown into something much bigger. In that time, he's built a strong foundation in animation, game design, Scratch-based storytelling, virtual interactive projects, and core programming concepts, sharpening his craft with every project.\n\nNow, he's turned that growth into giving back. As a volunteer teacher in Odyssey's summer class, Matthias leads students through coding and project development, breaking down technical concepts and guiding them toward real computational thinking — not just following instructions, but learning to think like builders. \"Odyssey gave me the platform to learn, to grow, and now to teach,\" Matthias says. It's a full-circle moment: the student who once sat where his students now sit.", note:"We are honoured to spotlight Matthias because he built the already implemented digital attendance system for the organisation. Well-done Matthias! We're happy to have you on our team, and we're excited for your journey with us.", icon:""},
+  impact:{ name:"EMMANUELLA OLUFIADE", photo:"", story:"For Emmanuella, building “Lumina” was a story of bugs and breakthroughs. She and her team, The Pantheons, set out to solve a pressing issue in their community but before they could write a single line of code, they had to agree on who they were. It took several attempts before the name “The Pantheons” finally stuck.\n\nThat was only the beginning. As the project progressed, the team faced misunderstandings, internal conflicts, and technical setbacks that tested their resolve. But they didn't back down. Technovation taught them patience and teamwork, especially when collaboration grew difficult.\n\nMidway through the program, Emmanuella went quiet for a stretch; she was sitting for her SSCE exams. But her absence wasn't a setback; it set the stage for one of their biggest triumphs. When she returned, she and her teammates pushed through complex technical challenges to bring their mobile app to life.\n\nEmmanuella didn't just walk away with an app. Technovation sparked deeper exploration, inspiration, and curiosity in her, and her experience with Technovation Girls remains one she calls unforgettable. Her discipline paid off beyond the program, too: Emmanuella sat her SSCE while still in SS2 and came out with 7 A's and 2 B's. Her story is giving bugs to breakthroughs.", graphic:""},
+  opportunities:[
+    {title:"Student Venture Capital Grant (S-VCG) — Prize (up to N50m + mentorship)", link:"https://svcg.education.gov.ng/"},
+    {title:"Schneider Electric Graduate Trainee Program 2026 (Global)", link:"https://www.scholarshipregion.com/schneider-electric-graduate-trainee/"},
+    {title:"Commonwealth PhD Scholarships For Developing Countries (Fully Funded)", link:"https://www.scholarshipregion.com/commonwealth-phd-scholarship/"},
+    {title:"International Youth Math Challenge 2026 For High School and Undergraduates | $700 Award", link:"https://www.scholarshipregion.com/international-youth-math-challenge/"},
+    {title:"2026 Erasmus for Young Entrepreneurs (European Business Exchange Program)", link:"https://www.scholarshipregion.com/erasmus-for-young-entrepreneurs/#google_vignette"}
+  ],
+  closing:{
+    about:"Odyssey Educational Foundation is committed to impacting society positively through STEM education. We are involved in a wide range of areas in education, and they include capacity building for educators, development of STEM programs and their implementation, women's empowerment, gender equality, and quality education for the girl child. Our focus is on how to bridge the gap in STEM literacy in Nigeria, moving the nation from \"labor-driven to knowledge-driven.\"",
+    mission:"To promote STEM education & application with a view to catalysing industrialisation, Research and Development, and co-creating with nature in the African region.",
+    vision:"A future without skill-gap, ensuring inclusiveness in human development and participation to attain excellence.",
+    social:"@odysseyedu_fdn", address:"No. 3 Martin Luther King Jr St, 55 Road Off 5th Avenue, Gwarinpa, Abuja.",
+    website:"www.odysseyedufoundation.org", email:"support@odysseyedufoundation.com", phone:"+234-813-458-5923",
+    logo:"data:image/png;base64,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"
+  }
+};
+
+// ---------- Helpers ----------
+function fileToData(input, cb){
+  const f = input.files && input.files[0]; if(!f) return;
+  const r = new FileReader(); r.onload = ()=>{ cb(r.result, f.name); render(); }; r.readAsDataURL(f);
+}
+function imgTag(src, cls, h){
+  if(src) return `<img src="${src}" class="${cls}" style="${h?'height:'+h:''}">`;
+  return `<div class="${cls}" style="background:#d6e2dd;color:#6b8079;display:flex;align-items:center;justify-content:center;font-size:10px;border:1px dashed #b9c9c2;${cls.includes('cover')?'height:120px':''}${cls.includes('event')?'height:92px':''}${cls.includes('thumb')?'height:72px':''}">no image</div>`;
+}
+function esc(s){ return (s||"").replace(/</g,"&lt;").replace(/\n/g,"<br>"); }
+
+
+// ---------- FULL AUTO bulk ----------
+function logAuto(msg){ const el=document.getElementById('autoLog'); if(el) el.textContent += msg + "\n"; }
+function clearAuto(){ document.getElementById('autoLog').textContent=""; render(); }
+function handleBulkDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag'); if(e.dataTransfer.files.length) handleBulkFiles({files:e.dataTransfer.files}); }
+async function handleBulkFiles(input){
+  const files = Array.from(input.files||[]); if(!files.length) return;
+  logAuto(`⏳ ${files.length} file(s) received — parsing...`);
+  // Reset events if user dropped fresh set? Keep volunteer/impact but append events
+  let first=true;
+  for(const f of files){
+    await parseAndAutoRoute(f, first);
+    first=false;
+  }
+  // After all files, auto-sync month if detectable, and refresh tiles
+  autoSyncMonthFromFiles(files);
+  autoSyncTiles();
+  render();
+  logAuto(`✅ Done. ${S.events.length} event(s), volunteer: ${S.volunteer.name}, impact: ${S.impact.name}`);
+  // Scroll to preview
+  document.getElementById('preview').scrollIntoView({behavior:'smooth', block:'start'});
+}
+function detectRoute(filename, text){
+  const s=(filename+" "+text.slice(0,800)).toLowerCase();
+  if(/(volunteer|intern|spotlight|zakka|matthias)/.test(s)) return "volunteer";
+  if(/(impact|lumina|pantheons|emmanuella|technovation|story)/.test(s)) return "impact";
+  return "event";
+}
+async function parseAndAutoRoute(file, isFirst){
+  const name=file.name.toLowerCase();
+  let text="", images=[];
+  try{
+    if(name.endsWith(".docx")){
+      const buf=await file.arrayBuffer();
+      const res=await mammoth.extractRawText({arrayBuffer:buf}); text=res.value||"";
+      try{ await mammoth.convertToHtml({arrayBuffer:buf}, {convertImage:mammoth.images.imgElement(img=>img.read("base64").then(b64=>{images.push("data:"+img.contentType+";base64,"+b64); return {src:"data:"+img.contentType+";base64,"+b64};}))}); }catch(e){}
+    }else if(name.endsWith(".pdf")){
+      const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; let out=""; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); out+=tc.items.map(it=>it.str).join(" ")+"\n\n"; } text=out;
+    }else{ text=await file.text(); }
+  }catch(e){ logAuto(`⚠️ ${file.name}: ${e.message}`); return; }
+  const route=detectRoute(file.name, text);
+  const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  let title=lines[0]||file.name.replace(/\.[^.]+$/,'');
+  const tMatch=text.match(/(?:Title|Event|Heading|Subject)\s*:\s*(.+)/i); if(tMatch) title=tMatch[1].split("\n")[0].trim();
+  const bMatch=text.match(/(?:Summary|Description|Body|Content|Report|Overview)\s*:\s*([\s\S]+)/i);
+  let body=bMatch?bMatch[1].trim():lines.slice(1).join("\n\n");
+  if(body.length<20) body=lines.slice(1).join("\n\n")||text.slice(title.length).trim();
+  title=title.slice(0,120); body=body.slice(0,3200);
+  if(route==="volunteer"){
+    const nM=text.match(/Name\s*:\s*(.+)/i); S.volunteer.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.volunteer.bio=body.slice(0,2000); if(images[0]) S.volunteer.photo=images[0]; logAuto(`→ Volunteer: ${S.volunteer.name}`);
+  }else if(route==="impact"){
+    const nM=text.match(/Name\s*:\s*(.+)/i); S.impact.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.impact.story=body.slice(0,3200); if(images[0]) S.impact.photo=images[0]; logAuto(`→ Impact: ${S.impact.name}`);
+  }else{
+    // if first event and default placeholder events exist, replace placeholder on first auto event
+    if(S.events.length===4 && S.events[0].title==="Sensational Summer Take-Off Programme" && isFirst) S.events=[];
+    S.events.push({title:title||"New Event", body:body, img1:images[0]||"", img2:images[1]||"", icon:"", graphic:""}); logAuto(`→ Event: ${title}`);
+  }
+  // Also try to infer cover intro from first event if cover intro still default
+  if(S.cover.intro.includes("In August") && route==="event" && body.length>80){
+    S.cover.intro = body.slice(0,380) + (body.length>380?"…":"");
+  }
+}
+function autoSyncMonthFromFiles(files){
+  const text = files.map(f=>f.name).join(" ");
+  const months=["January","February","March","April","May","June","July","August","September","October","November","December"];
+  for(let m of months){ if(new RegExp(m,"i").test(text)){ S.monthLabel=m+" Edition"; break; } }
+  // also try inside parsed titles? already handled; fallback to current month if still August and files have dates
+  // Detect year
+  const y=text.match(/(20\d{2})/); if(y) S.year=y[1];
+}
+function autoSyncTiles(){
+  // Auto-populate the 3 cover tiles from first event/volunteer/impact images
+  if(S.events[0]?.img1) S.updates[0].img=S.events[0].img1;
+  if(S.volunteer.photo) S.updates[1].img=S.volunteer.photo;
+  if(S.impact.photo) S.updates[2].img=S.impact.photo;
+}
+function autoBuildDemo(){ logAuto("Demo data already loaded — edit or drop your reports to overwrite."); }
+
+
+// ---------- Document auto-parse ----------
+async function parseDocFile(input, target){
+  const f = input.files[0]; if(!f) return;
+  const name = f.name.toLowerCase();
+  let text = "", images = [];
+  try{
+    if(name.endsWith(".docx")){
+      const buf = await f.arrayBuffer();
+      const res = await mammoth.extractRawText({arrayBuffer:buf});
+      text = res.value || "";
+      // mammoth image extraction (convert to dataURL if present)
+      try{
+        const withImgs = await mammoth.convertToHtml({arrayBuffer:buf}, {
+          convertImage: mammoth.images.imgElement(function(img){
+            return img.read("base64").then(function(b64){
+              images.push("data:"+img.contentType+";base64,"+b64);
+              return {src:"data:"+img.contentType+";base64,"+b64};
+            });
+          })
+        });
+      }catch(e){}
+    } else if(name.endsWith(".pdf")){
+      const buf = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+      let out = "";
+      for(let i=1;i<=pdf.numPages;i++){
+        const page = await pdf.getPage(i);
+        const tc = await page.getTextContent();
+        out += tc.items.map(it=>it.str).join(" ") + "\n\n";
+      }
+      text = out;
+    } else {
+      text = await f.text();
+    }
+  }catch(e){ alert("Could not read document: "+e.message); return; }
+
+  // Heuristic: Title is first non-empty line up to 120 chars; body is rest
+  const lines = text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  let title = lines[0] || "";
+  // Try to detect labeled fields: Title: / Event: / Summary:
+  const titleMatch = text.match(/(?:Title|Event|Heading)\s*:\s*(.+)/i);
+  if(titleMatch) title = titleMatch[1].split("\n")[0].trim();
+  const bodyMatch = text.match(/(?:Summary|Description|Body|Content|Report)\s*:\s*([\s\S]+)/i);
+  let body = bodyMatch ? bodyMatch[1].trim() : lines.slice(1).join("\n\n");
+  if(body.length < 20) body = lines.slice(1).join("\n\n") || text.slice(title.length).trim();
+
+  if(target==="event"){
+    // create new event from parsed doc
+    S.events.push({title: title.slice(0,120) || "New Event", body: body.slice(0,3000), img1: images[0]||"", img2: images[1]||"", icon:"", graphic:""});
+  } else if(target==="volunteer"){
+    const nameMatch = text.match(/(?:Name)\s*:\s*(.+)/i);
+    const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
+    S.volunteer.name = name.slice(0,60).toUpperCase();
+    S.volunteer.bio = body.slice(0,2000);
+    if(images[0]) S.volunteer.photo = images[0];
+  } else if(target==="impact"){
+    const nameMatch = text.match(/(?:Name)\s*:\s*(.+)/i);
+    const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
+    S.impact.name = name.slice(0,60).toUpperCase();
+    S.impact.story = body.slice(0,3000);
+    if(images[0]) S.impact.photo = images[0];
+  }
+  render();
+}
+
+// ---------- Render Controls ----------
+function renderControls(){
+  const h = `
+  <fieldset style="background:linear-gradient(135deg,#f4faf7,#fff6ef);border:2px solid var(--green)"><legend style="color:var(--orange)">⚡ FULL AUTO — Just upload reports</legend>
+    <div class="drop" id="bulkDrop" onclick="document.getElementById('bulkFiles').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleBulkDrop(event)">
+      <b style="font-size:14px">📂 Drop ALL reports here (multiple files)</b><br><small>.docx / .pdf / .txt / .md — titles, summaries & pictures auto-fill from your documents</small><br><small style="color:var(--green)">Volunteer cues → Spotlight &nbsp;|&nbsp; Impact/story cues → Impact Story &nbsp;|&nbsp; else → Event page</small>
+      <input id="bulkFiles" type="file" accept=".docx,.pdf,.txt,.md" multiple style="display:none" onchange="handleBulkFiles(this)">
+    </div>
+    <div id="autoLog" style="font-size:11px;color:#2a3a32;margin-top:8px;white-space:pre-wrap"></div>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary" onclick="autoBuildDemo()">✨ Try with sample data</button><button class="btn btn-ghost" onclick="clearAuto()">Clear auto-filled</button></div>
+    <small class="hint">Fully automated: month/year, cover intro, events, volunteer & impact are all inferred from filenames + headings + dates + embedded images. Edit anything after — it stays editable.</small>
+  </fieldset>
+
+  <fieldset><legend>① Edition — Month syncs everywhere</legend>
+    <label>Month / Edition label</label>
+    <input type="text" value="${S.monthLabel}" oninput="S.monthLabel=this.value;render()">
+    <div class="row2"><div><label>Year</label><input type="text" value="${S.year}" oninput="S.year=this.value;render()"></div>
+    <div><label>Month picker (auto)</label><input type="month" onchange="const d=new Date(this.value+'-01'); if(!isNaN(d)){ const m=d.toLocaleString('en-US',{month:'long'}); S.monthLabel=m+' Edition'; S.year=String(d.getFullYear()); render(); }"></div></div>
+    <small class="hint">The month label appears on every page header and the cover badge automatically.</small>
+  </fieldset>
+
+  <fieldset><legend>② Cover page — exact sample layout</legend>
+    <label>Top banner image (wide hero behind card)</label>
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.banner=v)">
+    ${S.cover.banner?`<img src="${S.cover.banner}" class="thumb">`:``}
+    <label>Feature image (top-right inside card)</label>
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.feature=v)">
+    ${S.cover.feature?`<img src="${S.cover.feature}" class="thumb">`:``}
+    <label>Decorative graphic / icon for cover (optional, per-page element)</label>
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.graphic=v)">
+    ${S.cover.graphic?`<img src="${S.cover.graphic}" style="max-height:46px;margin-top:6px">`:``}
+    <label>Headline</label><input type="text" value="${S.cover.headline}" oninput="S.cover.headline=this.value;render()">
+    <label>Sub label</label><input type="text" value="${S.cover.sub}" oninput="S.cover.sub=this.value;render()">
+    <label>Intro paragraph</label><textarea oninput="S.cover.intro=this.value;render()">${S.cover.intro}</textarea>
+  </fieldset>
+
+  <fieldset><legend>③ Recent Updates — 3 tiles on cover</legend>
+    <small class="hint">These are the 3 preview tiles (“Events / Volunteer Spotlight / Stories of impact”). Each tile image is uploaded separately and also links to its full page.</small>
+    ${S.updates.map((u,i)=>`
+      <div class="block">
+        <label>Tile ${i+1} label</label><input type="text" value="${u.label}" oninput="S.updates[${i}].label=this.value;render()">
+        <label>Tile ${i+1} image — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.updates[${i}].img=v)">
+        ${u.img?`<img src="${u.img}" class="thumb" style="height:72px">`:``}
+        <label>Caption</label><textarea oninput="S.updates[${i}].cap=this.value;render()">${u.cap}</textarea>
+      </div>
+    `).join('')}
+  </fieldset>
+
+  <fieldset><legend>④ Event pages — upload report / document</legend>
+    <div class="drop" onclick="document.getElementById('eventDoc').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');document.getElementById('eventDoc').files=event.dataTransfer.files;parseDocFile(document.getElementById('eventDoc'),'event')">
+      <b>📄 Drop a report here</b> or click to choose<br><small>.docx / .pdf / .txt with Title + Summary + images → auto-creates an event page</small>
+      <input id="eventDoc" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" onchange="parseDocFile(this,'event')">
+    </div>
+    <small class="hint">Expected structure: first line = Title, rest = summary. Or use labels like <code class="inline">Title: ...</code> and <code class="inline">Summary: ...</code>. Images inside .docx are auto-imported as page images.</small>
+    ${S.events.map((e,i)=>`
+      <div class="block">
+        <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:12px">Event ${i+1}</b><button class="btn btn-danger btn-small" onclick="S.events.splice(${i},1);render()">Remove</button></div>
+        <label>Title</label><input type="text" value="${e.title}" oninput="S.events[${i}].title=this.value;render()">
+        <label>Summary / body</label><textarea oninput="S.events[${i}].body=this.value;render()">${e.body}</textarea>
+        <div class="row2"><div><label>Image 1</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img1=v)">${e.img1?`<img src="${e.img1}" class="thumb" style="height:78px">`:``}</div>
+        <div><label>Image 2 (wide, optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img2=v)">${e.img2?`<img src="${e.img2}" class="thumb" style="height:78px">`:``}</div></div>
+        <label>Icon / element / graphic for THIS event page (optional)</label>
+        <input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].icon=v)">
+        ${e.icon?`<img src="${e.icon}" style="max-height:40px;margin-top:6px">`:``}
+        <label>Extra decorative graphic (bottom, optional)</label>
+        <input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].graphic=v)">
+        ${e.graphic?`<img src="${e.graphic}" style="max-height:40px;margin-top:6px">`:``}
+      </div>
+    `).join('')}
+    <button class="btn btn-green btn-small" style="margin-top:8px" onclick="S.events.push({title:'New Event',body:'',img1:'',img2:'',icon:'',graphic:''});render()">+ Add event page manually</button>
+  </fieldset>
+
+  <fieldset><legend>⑤ Volunteer / Intern Spotlight</legend>
+    <div class="drop" onclick="document.getElementById('volDoc').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');document.getElementById('volDoc').files=event.dataTransfer.files;parseDocFile(document.getElementById('volDoc'),'volunteer')">
+      <b>📄 Drop volunteer report</b> or click<br><small>.docx / .pdf / .txt auto-fills name, photo & bio</small>
+      <input id="volDoc" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" onchange="parseDocFile(this,'volunteer')">
+    </div>
+    <label>Name</label><input type="text" value="${S.volunteer.name}" oninput="S.volunteer.name=this.value;render()">
+    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.photo=v)">
+    ${S.volunteer.photo?`<img src="${S.volunteer.photo}" class="thumb-circle" style="margin-top:6px">`:``}
+    <label>Bio / journey</label><textarea oninput="S.volunteer.bio=this.value;render()">${S.volunteer.bio}</textarea>
+    <label>Why we're spotlighting them (highlight box)</label><textarea oninput="S.volunteer.note=this.value;render()">${S.volunteer.note}</textarea>
+    <label>Icon / graphic for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.icon=v)">
+    ${S.volunteer.icon?`<img src="${S.volunteer.icon}" style="max-height:40px;margin-top:6px">`:``}
+  </fieldset>
+
+  <fieldset><legend>⑥ Impact Story</legend>
+    <div class="drop" onclick="document.getElementById('impDoc').click()" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="event.preventDefault();this.classList.remove('drag');document.getElementById('impDoc').files=event.dataTransfer.files;parseDocFile(document.getElementById('impDoc'),'impact')">
+      <b>📄 Drop impact story document</b> or click<br><small>.docx / .pdf / .txt auto-fills name, story & image</small>
+      <input id="impDoc" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" onchange="parseDocFile(this,'impact')">
+    </div>
+    <label>Name</label><input type="text" value="${S.impact.name}" oninput="S.impact.name=this.value;render()">
+    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.photo=v)">
+    ${S.impact.photo?`<img src="${S.impact.photo}" class="thumb-circle" style="margin-top:6px">`:``}
+    <label>Story text</label><textarea oninput="S.impact.story=this.value;render()">${S.impact.story}</textarea>
+    <label>Decorative graphic / icon for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.graphic=v)">
+    ${S.impact.graphic?`<img src="${S.impact.graphic}" style="max-height:46px;margin-top:6px">`:``}
+  </fieldset>
+
+  <fieldset><legend>⑦ Opportunities</legend>
+    ${S.opportunities.map((o,i)=>`
+      <div class="block">
+        <label>Title</label><input type="text" value="${o.title}" oninput="S.opportunities[${i}].title=this.value;render()">
+        <label>Link</label><input type="url" value="${o.link}" oninput="S.opportunities[${i}].link=this.value;render()">
+        <button class="btn btn-danger btn-small" onclick="S.opportunities.splice(${i},1);render()">Remove</button>
+      </div>
+    `).join('')}
+    <button class="btn btn-green btn-small" style="margin-top:8px" onclick="S.opportunities.push({title:'New opportunity',link:'https://'});render()">+ Add opportunity</button>
+  </fieldset>
+
+  <fieldset><legend>⑧ Closing page</legend>
+    <label>About text</label><textarea oninput="S.closing.about=this.value;render()">${S.closing.about}</textarea>
+    <label>Mission</label><textarea oninput="S.closing.mission=this.value;render()">${S.closing.mission}</textarea>
+    <label>Vision</label><textarea oninput="S.closing.vision=this.value;render()">${S.closing.vision}</textarea>
+    <label>Logo / graphic (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.closing.logo=v)">
+    ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-top:6px">`:``}
+    <div class="row2"><div><label>Website</label><input type="text" value="${S.closing.website}" oninput="S.closing.website=this.value;render()"></div><div><label>Email</label><input type="text" value="${S.closing.email}" oninput="S.closing.email=this.value;render()"></div></div>
+    <label>Phone</label><input type="text" value="${S.closing.phone}" oninput="S.closing.phone=this.value;render()">
+    <label>Social handle</label><input type="text" value="${S.closing.social}" oninput="S.closing.social=this.value;render()">
+    <label>Address</label><input type="text" value="${S.closing.address}" oninput="S.closing.address=this.value;render()">
+  </fieldset>
+
+  <fieldset><legend>⑨ Brand colours — locked to sample</legend>
+    <div class="color-row"><input type="color" value="${S.colors.green}" oninput="S.colors.green=this.value;applyColors();render()"><span>Primary green (headers)</span><code class="inline">${S.colors.green}</code></div>
+    <div class="color-row"><input type="color" value="${S.colors.orange}" oninput="S.colors.orange=this.value;applyColors();render()"><span>Accent orange (borders, pills)</span><code class="inline">${S.colors.orange}</code></div>
+    <div class="color-row"><input type="color" value="${S.colors.blue}" oninput="S.colors.blue=this.value;applyColors();render()"><span>Page blue background</span><code class="inline">${S.colors.blue}</code></div>
+    <div class="color-row"><input type="color" value="${S.colors.light}" oninput="S.colors.light=this.value;applyColors();render()"><span>Card light fill</span><code class="inline">${S.colors.light}</code></div>
+    <small class="hint">Defaults match the August newsletter sample. You can tweak but “Reset to sample” restores exact values.</small>
+    <button class="btn btn-ghost btn-small" style="margin-top:8px" onclick="S.colors={green:'#3EAE5B',orange:'#F5822A',blue:'#BFE4F7',light:'#EAF6FD'};applyColors();render()">↺ Reset to sample colours</button>
+  </fieldset>
+
+  <div class="actions">
+    <button class="btn btn-primary" onclick="exportPPTX()">🎨 Export to Canva (.pptx)</button>
+    <button class="btn btn-green" onclick="exportPDF()">📄 Export PDF</button>
+  </div>
+  <div class="actions">
+    <button class="btn btn-ghost" onclick="saveJSON()">💾 Save project (.json)</button>
+    <label class="btn btn-ghost" style="text-align:center;cursor:pointer">📂 Load project<input type="file" accept=".json" style="display:none" onchange="loadJSON(this)"></label>
+  </div>
+  <small class="hint">PPTX is fully editable in Canva: <b>Canva → Create a design → Import file</b>. Every text and image stays editable. PDF is for print/share.</small>
+  `;
+  document.getElementById('controls').innerHTML = h;
+}
+
+function applyColors(){
+  document.documentElement.style.setProperty('--green', S.colors.green);
+  document.documentElement.style.setProperty('--orange', S.colors.orange);
+  document.documentElement.style.setProperty('--blue', S.colors.blue);
+  document.documentElement.style.setProperty('--light', S.colors.light);
+}
+
+// ---------- Preview ----------
+function renderPreview(){
+  const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
+  let out = "";
+
+  // COVER
+  out += `
+  <div class="page" id="page-cover">
+    ${S.cover.banner?`<img class="cover-banner" src="${S.cover.banner}">`:`<div class="cover-banner" style="background:linear-gradient(135deg, ${S.colors.green}, #2a7a3d);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">Upload a banner image on the left</div>`}
+    <div class="cover-card">
+      <div style="text-align:center;margin-bottom:6px"><img src="${S.closing.logo}" style="width:64px;height:64px;border-radius:50%;background:#fff;padding:3px;border:2px solid ${S.colors.green};object-fit:cover" alt="Odyssey logo"></div>
+      <div class="cover-meta">${S.cover.sub}</div>
+      <div class="cover-badge">${S.monthLabel}</div>
+      <h2>${S.cover.headline}</h2>
+      ${S.cover.feature?`<img class="cover-feature" src="${S.cover.feature}">`:`<div class="cover-feature" style="background:#e6eef2;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:11px;border-style:dashed">Upload feature image</div>`}
+      ${S.cover.graphic?`<div style="text-align:right;margin-top:6px"><img src="${S.cover.graphic}" style="max-height:38px"></div>`:``}
+      <p style="font-size:11.5px;line-height:1.5;margin:10px 0 0;color:#24352e">${esc(S.cover.intro)}</p>
+      <div class="updates-pill">Recent Updates:</div>
+      <div class="tiles">
+        ${S.updates.map(u=>`
+          <div class="tile">
+            ${u.img?`<img src="${u.img}">`:`<div style="height:72px;background:#d6e2dd;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">no image</div>`}
+            <div class="lbl">${u.label}</div>
+            <div class="cap">${u.cap}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div style="text-align:center;padding:8px 0 10px;font-size:10px;color:#2a3a32;font-weight:700">${monthYear} — Odyssey Educational Foundation</div>
+  </div>`;
+
+  // EVENTS
+  S.events.forEach(e=>{
+    out += `
+    <div class="page">
+      <div class="bar sky"><span style="display:flex;align-items:center;gap:8px"><img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover"><b>${monthYear}</b></span><span>Events</span></div>
+      <div class="content"><div class="card">
+        ${e.icon?`<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px"></div>`:``}
+        ${e.img1?`<img class="event-img" src="${e.img1}">`:`<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`}
+        <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${e.title}</h3>
+        <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(e.body)}</p>
+        <div class="clear"></div>
+        ${e.img2?`<img class="event-img-wide" src="${e.img2}">`:``}
+        ${e.graphic?`<div style="text-align:right;margin-top:8px"><img src="${e.graphic}" style="max-height:38px"></div>`:``}
+      </div></div>
+    </div>`;
+  });
+
+  // VOLUNTEER
+  out += `
+  <div class="page">
+    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px"><img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover"><b>${monthYear}</b></span><span>Volunteer/Intern Spotlight</span></div>
+    <div class="content"><div class="card">
+      <div class="spot">
+        ${S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">photo</div>`}
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}</h3>
+      </div>
+      ${S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px"></div>`:``}
+      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(S.volunteer.bio)}</p>
+      <div style="margin-top:10px;background:#fff;border:1px solid #e0e7e4;border-radius:10px;padding:10px;font-size:11.5px;line-height:1.5"><b>${esc(S.volunteer.note)}</b></div>
+    </div></div>
+  </div>`;
+
+  // IMPACT
+  out += `
+  <div class="page">
+    <div class="bar green"><span style="display:flex;align-items:center;gap:8px"><img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover"><b>${monthYear}</b></span><span>Impact Story</span></div>
+    <div class="content"><div class="card">
+      <div class="spot">
+        ${S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">photo</div>`}
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}</h3>
+      </div>
+      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(S.impact.story)}</p>
+      ${S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px"></div>`:``}
+    </div></div>
+  </div>`;
+
+  // OPPORTUNITIES
+  if(S.opportunities.length){
+    out += `
+    <div class="page">
+      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px"><img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover"><b>${monthYear}</b></span><span>Opportunities</span></div>
+      <div class="content"><div class="card opp">
+        ${S.opportunities.map((o,i)=>`
+          <div><div class="opp-item">${i+1}. ${o.title}</div><div class="opp-link"><a href="${o.link}" target="_blank">${o.link}</a></div></div>
+        `).join('')}
+      </div></div>
+    </div>`;
+  }
+
+  // CLOSING
+  out += `
+  <div class="page">
+    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px"><img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover"><b>${monthYear}</b></span><span></span></div>
+    <div class="content">
+      <div class="card" style="text-align:center">
+        ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-bottom:6px">`:``}
+        <p style="font-size:11px;line-height:1.6;margin:0">${esc(S.closing.about)}</p>
+        <h3 style="font-family:Montserrat,sans-serif;margin:14px 0 4px">Our Mission</h3>
+        <p style="font-size:11px;line-height:1.5;margin:0">${esc(S.closing.mission)}</p>
+        <h3 style="font-family:Montserrat,sans-serif;margin:14px 0 4px">Our Vision</h3>
+        <p style="font-size:11px;line-height:1.5;margin:0">${esc(S.closing.vision)}</p>
+        <div style="margin-top:12px;font-weight:800;font-size:11.5px;letter-spacing:.3px">FOLLOW US ON SOCIAL MEDIA</div>
+        <div style="font-size:11px;margin-top:4px">Odyssey Educational Foundation &nbsp; ${S.closing.social}</div>
+        <div style="font-size:10.5px;margin-top:6px">📍 ${S.closing.address}</div>
+      </div>
+      <div class="footer-thanks" style="font-family:Montserrat,sans-serif;font-weight:800;font-size:16px">Thank you for reading!</div>
+    </div>
+    <div class="footer-contact"><span>🌐 ${S.closing.website}</span><span>✉ ${S.closing.email}</span><span>📞 ${S.closing.phone}</span></div>
+  </div>`;
+
+  document.getElementById('preview').innerHTML = out;
+}
+
+function render(){ renderControls(); renderPreview(); applyColors(); }
+
+// ---------- Exports ----------
+function exportPDF(){
+  const el = document.getElementById('preview');
+  const opt = {
+    margin: 0,
+    filename: `Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pdf`,
+    image:{type:'jpeg', quality:0.98},
+    html2canvas:{scale:2, useCORS:true, backgroundColor:'#BFE4F7'},
+    jsPDF:{unit:'in', format:'a4', orientation:'portrait'}
+  };
+  html2pdf().set(opt).from(el).save();
+}
+
+async function exportPPTX(){
+  const pptx = new PptxGenJS();
+  pptx.defineLayout({name:'A4V', width:7.5, height:10});
+  pptx.layout='A4V';
+  const G = S.colors.green.replace('#',''), O = S.colors.orange.replace('#',''), B = S.colors.blue.replace('#',''), L = S.colors.light.replace('#','');
+  const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
+  function addImg(slide, src, x,y,w,h){ if(src) try{ slide.addImage({data:src,x,y,w,h}); }catch(e){} }
+
+  // Cover
+  let s = pptx.addSlide(); s.background={color:B};
+  if(S.cover.banner) addImg(s,S.cover.banner,0,0,7.5,1.8);
+  else s.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:1.8,fill:{color:G}});
+  s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.4,w:7,h:6.9,fill:{color:'FFFFFF'},rectRadius:0.2,line:{color:O,width:2}});
+  s.addText(S.cover.sub,{x:0.45,y:1.55,w:3.5,h:0.3,fontSize:9,bold:true,color:'2a3a32'});
+  s.addText(S.monthLabel,{x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,bold:true,color:O});
+  s.addText(S.cover.headline,{x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,bold:true,color:G});
+  addImg(s,S.cover.feature,4.7,1.55,2.45,1.65);
+  if(S.cover.graphic) addImg(s,S.cover.graphic,6.2,3.0,0.7,0.7);
+  s.addText(S.cover.intro,{x:0.45,y:3.35,w:6.6,h:1.45,fontSize:8,color:'24352e',valign:'top'});
+  s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:4.85,w:6.6,h:0.32,fill:{color:G},rectRadius:0.15});
+  s.addText('Recent Updates:',{x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,bold:true,color:'FFFFFF',align:'center',valign:'middle'});
+  S.updates.forEach((u,i)=>{
+    const x=0.55+i*2.22;
+    addImg(s,u.img,x,5.3,2.0,1.05);
+    if(!u.img) s.addShape(pptx.shapes.RECTANGLE,{x,y:5.3,w:2,h:1.05,fill:{color:'dde8e3'}});
+    s.addText(u.label,{x,y:6.38,w:2,h:0.28,fontSize:8,bold:true,align:'center'});
+    s.addText(u.cap,{x,y:6.66,w:2,h:0.95,fontSize:6,color:'33443d',align:'center',valign:'top'});
+  });
+  addImg(s,S.closing.logo,3.55,8.05,0.4,0.4);
+  s.addText(`${monthYear} — Odyssey Educational Foundation`,{x:0.25,y:8.45,w:7,h:0.25,fontSize:7,color:'2a3a32',align:'center'});
+
+  // Events
+  S.events.forEach(e=>{
+    let sl = pptx.addSlide(); sl.background={color:B};
+    sl.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:'4FA6D8'}});
+    addImg(sl,S.closing.logo,0.06,0.12,0.6,0.6);
+    sl.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+    sl.addText('Events',{x:5.4,y:0.22,w:1.8,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+    sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+    if(e.icon) addImg(sl,e.icon,6.35,1.15,0.7,0.7);
+    addImg(sl,e.img1,0.45,1.25,2.15,1.55);
+    if(!e.img1) sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:1.25,w:2.15,h:1.55,fill:{color:'dde8e3'},rectRadius:0.12});
+    sl.addText(e.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,bold:true,color:'14261b'});
+    sl.addText(e.body,{x:0.45,y:2.95,w:6.6,h:3.6,fontSize:8,color:'1a2b22',valign:'top'});
+    if(e.img2) addImg(sl,e.img2,0.45,6.65,6.6,2.55);
+    if(e.graphic) addImg(sl,e.graphic,6.35,8.2,0.65,0.65);
+  });
+
+  // Volunteer
+  let v = pptx.addSlide(); v.background={color:B};
+  v.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
+  addImg(v,S.closing.logo,0.06,0.12,0.6,0.6);
+  v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+  v.addText('Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,bold:true,color:'FFFFFF',align:'right'});
+  v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+  addImg(v,S.volunteer.photo,0.45,1.25,1.35,1.35);
+  v.addText(S.volunteer.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,bold:true,color:'14261b'});
+  if(S.volunteer.icon) addImg(v,S.volunteer.icon,6.3,1.15,0.75,0.75);
+  v.addText(S.volunteer.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,color:'1a2b22',valign:'top'});
+  v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:6,w:6.6,h:2.2,fill:{color:'FFFFFF'},rectRadius:0.12,line:{color:'dfe8e3',width:0.5}});
+  v.addText(S.volunteer.note,{x:0.55,y:6.1,w:6.4,h:2,fontSize:8,color:'1a2b22',italic:true,valign:'top'});
+
+  // Impact
+  let im = pptx.addSlide(); im.background={color:B};
+  im.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:G}});
+  addImg(im,S.closing.logo,0.06,0.12,0.6,0.6);
+  im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+  im.addText('Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+  im.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+  addImg(im,S.impact.photo,0.45,1.25,1.35,1.35);
+  im.addText(S.impact.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,bold:true,color:'14261b'});
+  im.addText(S.impact.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,color:'1a2b22',valign:'top'});
+  if(S.impact.graphic) addImg(im,S.impact.graphic,6,7.8,0.9,0.9);
+
+  // Opportunities
+  if(S.opportunities.length){
+    let op = pptx.addSlide(); op.background={color:B};
+    op.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
+    addImg(op,S.closing.logo,0.06,0.12,0.6,0.6);
+    op.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+    op.addText('Opportunities',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+    op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+    S.opportunities.forEach((o,i)=>{
+      const y=1.3+i*1.42;
+      op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y,w:6.6,h:0.52,fill:{color:O},rectRadius:0.08});
+      op.addText(`${i+1}. ${o.title}`,{x:0.55,y,w:6.4,h:0.52,fontSize:9,bold:true,color:'FFFFFF',valign:'middle'});
+      op.addText(o.link,{x:0.55,y:y+0.54,w:6.4,h:0.38,fontSize:7.5,color:'0b57d0',hyperlink:{url:o.link}});
+    });
+  }
+
+  // Closing
+  let c = pptx.addSlide(); c.background={color:B};
+  c.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
+  addImg(c,S.closing.logo,0.06,0.12,0.6,0.6);
+  c.addText(monthYear,{x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+  c.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:7.25,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+  if(S.closing.logo) addImg(c,S.closing.logo,3.25,1.2,1,0.6);
+  c.addText(S.closing.about,{x:0.45,y:1.9,w:6.6,h:1.45,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
+  c.addText('Our Mission',{x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,bold:true,color:'14261b',align:'center'});
+  c.addText(S.closing.mission,{x:0.45,y:3.82,w:6.6,h:0.85,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
+  c.addText('Our Vision',{x:0.45,y:4.78,w:6.6,h:0.32,fontSize:11,bold:true,color:'14261b',align:'center'});
+  c.addText(S.closing.vision,{x:0.45,y:5.10,w:6.6,h:0.85,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
+  c.addText('FOLLOW US ON SOCIAL MEDIA',{x:0.45,y:6.15,w:6.6,h:0.32,fontSize:9,bold:true,color:'14261b',align:'center'});
+  c.addText(`Odyssey Educational Foundation   ${S.closing.social}`,{x:0.45,y:6.5,w:6.6,h:0.32,fontSize:8,color:'1a2b22',align:'center'});
+  c.addText(`📍 ${S.closing.address}`,{x:0.45,y:6.92,w:6.6,h:0.32,fontSize:7,color:'1a2b22',align:'center'});
+  c.addText('Thank you for reading!',{x:0.45,y:7.55,w:6.6,h:0.5,fontSize:16,bold:true,color:'FFFFFF',align:'center'});
+  c.addShape(pptx.shapes.RECTANGLE,{x:0,y:9.35,w:7.5,h:0.65,fill:{color:O}});
+  c.addText(`🌐 ${S.closing.website}     ✉ ${S.closing.email}     📞 ${S.closing.phone}`,{x:0.2,y:9.48,w:7.1,h:0.4,fontSize:7.5,color:'FFFFFF',align:'center'});
+
+  pptx.writeFile({fileName:`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pptx`});
+}
+
+function saveJSON(){
+  const blob = new Blob([JSON.stringify(S,null,2)],{type:'application/json'});
+  const a = document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}.json`; a.click();
+}
+function loadJSON(input){
+  const f=input.files[0]; if(!f) return;
+  const r=new FileReader(); r.onload=()=>{ try{ Object.assign(S, JSON.parse(r.result)); render(); }catch(e){ alert('Invalid JSON'); } }; r.readAsText(f);
+}
+
+// init
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+render();
+</script>
+</body>
+</html>
