@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Odyssey Educational Foundation — Automated Newsletter System</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script>window._pptxFallback=setTimeout(function(){ if(typeof PptxGenJS==="undefined"){ var s=document.createElement("script"); s.src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"; document.head.appendChild(s); }}, 1500);</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -610,6 +611,9 @@ function exportPDF(){
 }
 
 async function exportPPTX(){
+  if(typeof PptxGenJS==="undefined"){ alert("Export library still loading — please wait 2s and try again. If offline, check internet."); return; }
+  const btn=event && event.target ? event.target : null; if(btn) btn.textContent="⏳ Building...";
+  try{
   const pptx = new PptxGenJS();
   pptx.defineLayout({name:'A4V', width:7.5, height:10});
   pptx.layout='A4V';
@@ -718,7 +722,8 @@ async function exportPPTX(){
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:9.35,w:7.5,h:0.65,fill:{color:O}});
   c.addText(`🌐 ${S.closing.website}     ✉ ${S.closing.email}     📞 ${S.closing.phone}`,{x:0.2,y:9.48,w:7.1,h:0.4,fontSize:7.5,color:'FFFFFF',align:'center'});
 
-  pptx.writeFile({fileName:`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pptx`});
+  await pptx.writeFile({fileName:`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pptx`});
+  }catch(e){ console.error(e); alert("Canva export failed: "+e.message); } finally{ if(btn) btn.textContent="🎨 Export to Canva (.pptx)"; }
 }
 
 function saveJSON(){
