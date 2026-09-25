@@ -12,7 +12,7 @@ Drop reports/documents → newsletter auto-builds.
    - Month/year inferred from filename (`August`, `2026` etc.)
    - Cover intro + 3 tiles auto-filled from first event/volunteer/impact images
 4. Preview updates live — every header still has the **embedded logo** (`C:\Users\itoha\odyssey-newsletter-fully-automated\logo.png` base64).
-5. Edit anything after auto-fill if needed, then **🎨 Export to Canva (.pptx)** (editable in Canva) or **📄 PDF**.
+5. Edit anything after auto-fill if needed, then **🎨 Export to Canva (.pptx)** (editable in Canva) or **📄 PDF**. Each newsletter page becomes one PDF page / one Canva slide, with the newsletter structure and fonts preserved.
 
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 

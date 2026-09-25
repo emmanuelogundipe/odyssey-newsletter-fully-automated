@@ -7,6 +7,8 @@
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script>window._pptxFallback=setTimeout(function(){ if(typeof PptxGenJS==="undefined"){ var s=document.createElement("script"); s.src="https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"; document.head.appendChild(s); }}, 1500);</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
@@ -73,7 +75,7 @@ input[type=file]{width:100%;font-size:11.5px}
 
 /* Preview */
 .preview-label{font-size:11px;font-weight:800;color:#3a4a44;letter-spacing:.6px;margin:6px 0 10px;text-align:center;text-transform:uppercase}
-.page{width:540px;max-width:100%;margin:0 auto 22px;background:var(--blue);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.13);overflow:hidden;position:relative}
+.page{width:540px;max-width:100%;min-height:764px;margin:0 auto 22px;background:var(--blue);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.13);overflow:hidden;position:relative}
 .page .bar{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800}
 .page .bar.green{background:var(--green)} .page .bar.orange{background:var(--orange)} .page .bar.sky{background:#4FA6D8}
 .page .bar b{font-family:Montserrat,sans-serif;font-size:13px}
@@ -140,7 +142,8 @@ code.inline{background:#eef6f1;padding:1px 5px;border-radius:4px;font-size:11px}
         <li>Click <code class="inline">Export to Canva (.pptx)</code> on the left. A <b>.pptx</b> downloads.</li>
         <li>Go to <a href="https://www.canva.com/" target="_blank">canva.com</a> → <b>Create a design → Import file</b> → select the .pptx.</li>
         <li>Every text box, image, icon and colour block is now editable in Canva. Move, replace, or restyle anything.</li>
-        <li>Tip: keep the same A4 vertical layout (7.5 × 10 in) so nothing shifts when you import.</li>
+        <li>Each newsletter page is exported as one PDF page and one Canva slide, with the newsletter structure and fonts preserved.</li>
+        <li>Tip: keep the same A4 vertical layout (7.5 × 10.61 in) so nothing shifts when you import.</li>
       </ol>
       <div class="hint">PPTX is the native Canva-editable format. PDF export is for quick sharing/printing. If you use Canva Teams, you can also “Share → Brand Kit” to lock the green/orange/blue to your brand.</div>
     </div>
@@ -1039,16 +1042,56 @@ function renderAll(){ renderControls(); renderPreview(); applyColors(); }
 function render(){ renderAll(); }
 
 // ---------- Exports ----------
-function exportPDF(){
-  const el = document.getElementById('preview');
-  const opt = {
-    margin: 0,
-    filename: `Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pdf`,
-    image:{type:'jpeg', quality:0.98},
-    html2canvas:{scale:2, useCORS:true, backgroundColor:'#BFE4F7'},
-    jsPDF:{unit:'in', format:'a4', orientation:'portrait'}
-  };
-  html2pdf().set(opt).from(el).save();
+async function exportPDF(){
+  const btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+  if(btn) btn.textContent = '⏳ Building PDF…';
+  try{
+    if(typeof html2canvas === 'undefined' || !window.jspdf || !window.jspdf.jsPDF){
+      alert('PDF export libraries are still loading. Please wait a moment and try again.');
+      return;
+    }
+    if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const pages = Array.from(document.querySelectorAll('#preview .page'));
+    if(!pages.length) throw new Error('No newsletter pages found');
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:'a4', compress:true});
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const margin = 12;
+    const background = S.colors.blue || '#BFE4F7';
+
+    for(let index=0; index<pages.length; index++){
+      const page = pages[index];
+      const canvas = await html2canvas(page, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        backgroundColor: background,
+        imageTimeout: 0,
+        width: page.offsetWidth,
+        height: page.offsetHeight,
+        windowWidth: Math.max(document.documentElement.clientWidth, 1200)
+      });
+      const image = canvas.toDataURL('image/jpeg', 0.98);
+      const availableWidth = pageWidth - (margin * 2);
+      const availableHeight = pageHeight - (margin * 2);
+      const ratio = Math.min(availableWidth / canvas.width, availableHeight / canvas.height);
+      const width = canvas.width * ratio;
+      const height = canvas.height * ratio;
+      if(index > 0) pdf.addPage();
+      pdf.setFillColor(background);
+      pdf.rect(0, 0, pageWidth, pageHeight, 'F');
+      pdf.addImage(image, 'JPEG', (pageWidth - width) / 2, (pageHeight - height) / 2, width, height, undefined, 'FAST');
+    }
+    pdf.save(`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pdf`);
+  }catch(error){
+    console.error(error);
+    alert('PDF export failed: ' + error.message);
+  }finally{
+    if(btn) btn.textContent = '📄 Export PDF';
+  }
 }
 
 async function exportPPTX(){
@@ -1056,8 +1099,16 @@ async function exportPPTX(){
   const btn=event && event.target ? event.target : null; if(btn) btn.textContent="⏳ Building...";
   try{
   const pptx = new PptxGenJS();
-  pptx.defineLayout({name:'A4V', width:7.5, height:10});
+  // 7.5 × 10.61 in keeps the Canva import on an A4 portrait canvas.
+  pptx.defineLayout({name:'A4V', width:7.5, height:10.61});
   pptx.layout='A4V';
+  pptx.author = 'Odyssey Educational Foundation';
+  pptx.subject = 'Monthly Newsletter';
+  pptx.title = `Odyssey Newsletter - ${S.monthLabel} ${S.year}`;
+  pptx.company = 'Odyssey Educational Foundation';
+  pptx.lang = 'en-NG';
+  pptx.theme = { headFontFace:'Montserrat', bodyFontFace:'Inter', lang:'en-NG' };
+  pptx.rtlMode = false;
   const G = S.colors.green.replace('#',''), O = S.colors.orange.replace('#',''), B = S.colors.blue.replace('#',''), L = S.colors.light.replace('#','');
   const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
   function addImg(slide, src, x,y,w,h){ if(src) try{ slide.addImage({data:src,x,y,w,h}); }catch(e){} }
@@ -1067,65 +1118,66 @@ async function exportPPTX(){
   if(S.cover.banner) addImg(s,S.cover.banner,0,0,7.5,1.8);
   else s.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:1.8,fill:{color:G}});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.4,w:7,h:6.9,fill:{color:'FFFFFF'},rectRadius:0.2,line:{color:O,width:2}});
-  s.addText(S.cover.sub,{x:0.45,y:1.55,w:3.5,h:0.3,fontSize:9,bold:true,color:'2a3a32'});
-  s.addText(S.monthLabel,{x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,bold:true,color:O});
-  s.addText(S.cover.headline,{x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,bold:true,color:G});
+  s.addText(S.cover.sub,{x:0.45,y:1.55,w:3.5,h:0.3,fontSize:9,fit:'shrink',bold:true,color:'2a3a32'});
+  s.addText(S.monthLabel,{x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,fit:'shrink',bold:true,color:O});
+  s.addText(S.cover.headline,{x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,fit:'shrink',bold:true,color:G});
   addImg(s,S.cover.feature,4.7,1.55,2.45,1.65);
   if(S.cover.graphic) addImg(s,S.cover.graphic,6.2,3.0,0.7,0.7);
-  s.addText(S.cover.intro,{x:0.45,y:3.35,w:6.6,h:1.45,fontSize:8,color:'24352e',valign:'top'});
+  s.addText(S.cover.intro,{x:0.45,y:3.35,w:6.6,h:1.45,fontSize:8,fit:'shrink',color:'24352e',valign:'top'});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:4.85,w:6.6,h:0.32,fill:{color:G},rectRadius:0.15});
-  s.addText('Recent Updates:',{x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,bold:true,color:'FFFFFF',align:'center',valign:'middle'});
+  s.addText('Recent Updates:',{x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'FFFFFF',align:'center',valign:'middle'});
   S.updates.forEach((u,i)=>{
     const x=0.55+i*2.22;
     addImg(s,u.img,x,5.3,2.0,1.05);
     if(!u.img) s.addShape(pptx.shapes.RECTANGLE,{x,y:5.3,w:2,h:1.05,fill:{color:'dde8e3'}});
-    s.addText(u.label,{x,y:6.38,w:2,h:0.28,fontSize:8,bold:true,align:'center'});
-    s.addText(u.cap,{x,y:6.66,w:2,h:0.95,fontSize:6,color:'33443d',align:'center',valign:'top'});
+    s.addText(u.label,{x,y:6.38,w:2,h:0.28,fontSize:8,fit:'shrink',bold:true,align:'center'});
+    s.addText(u.cap,{x,y:6.66,w:2,h:0.95,fontSize:6,fit:'shrink',color:'33443d',align:'center',valign:'top'});
   });
   addImg(s,S.closing.logo,3.55,8.05,0.4,0.4);
-  s.addText(`${monthYear} — Odyssey Educational Foundation`,{x:0.25,y:8.45,w:7,h:0.25,fontSize:7,color:'2a3a32',align:'center'});
+  s.addText(`${monthYear} — Odyssey Educational Foundation`,{x:0.25,y:8.45,w:7,h:0.25,fontSize:7,fit:'shrink',color:'2a3a32',align:'center'});
 
   // Events
   S.events.forEach(e=>{
     let sl = pptx.addSlide(); sl.background={color:B};
     sl.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:'4FA6D8'}});
     addImg(sl,S.closing.logo,0.06,0.12,0.6,0.6);
-    sl.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
-    sl.addText('Events',{x:5.4,y:0.22,w:1.8,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+    sl.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    sl.addText('Events',{x:5.4,y:0.22,w:1.8,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
     if(e.icon) addImg(sl,e.icon,6.35,1.15,0.7,0.7);
     addImg(sl,e.img1,0.45,1.25,2.15,1.55);
     if(!e.img1) sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:1.25,w:2.15,h:1.55,fill:{color:'dde8e3'},rectRadius:0.12});
-    sl.addText(e.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,bold:true,color:'14261b'});
-    sl.addText(e.body,{x:0.45,y:2.95,w:6.6,h:3.6,fontSize:8,color:'1a2b22',valign:'top'});
-    if(e.img2) addImg(sl,e.img2,0.45,6.65,6.6,2.55);
-    if(e.graphic) addImg(sl,e.graphic,6.35,8.2,0.65,0.65);
+    sl.addText(e.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,fit:'shrink',bold:true,color:'14261b'});
+    const hasWideImage=Boolean(e.img2);
+    sl.addText(e.body,{x:0.45,y:2.95,w:6.6,h:hasWideImage?3.35:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
+    if(hasWideImage) addImg(sl,e.img2,0.45,6.5,6.6,2.55);
+    if(e.graphic) addImg(sl,e.graphic,6.35,hasWideImage?8.2:8.7,0.65,0.65);
   });
 
   // Volunteer
   let v = pptx.addSlide(); v.background={color:B};
   v.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
   addImg(v,S.closing.logo,0.06,0.12,0.6,0.6);
-  v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
-  v.addText('Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,bold:true,color:'FFFFFF',align:'right'});
+  v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+  v.addText('Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,fit:'shrink',bold:true,color:'FFFFFF',align:'right'});
   v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
   addImg(v,S.volunteer.photo,0.45,1.25,1.35,1.35);
-  v.addText(S.volunteer.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,bold:true,color:'14261b'});
+  v.addText(S.volunteer.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
   if(S.volunteer.icon) addImg(v,S.volunteer.icon,6.3,1.15,0.75,0.75);
-  v.addText(S.volunteer.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,color:'1a2b22',valign:'top'});
+  v.addText(S.volunteer.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
   v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:6,w:6.6,h:2.2,fill:{color:'FFFFFF'},rectRadius:0.12,line:{color:'dfe8e3',width:0.5}});
-  v.addText(S.volunteer.note,{x:0.55,y:6.1,w:6.4,h:2,fontSize:8,color:'1a2b22',italic:true,valign:'top'});
+  v.addText(S.volunteer.note,{x:0.55,y:6.1,w:6.4,h:2,fontSize:8,fit:'shrink',color:'1a2b22',italic:true,valign:'top'});
 
   // Impact
   let im = pptx.addSlide(); im.background={color:B};
   im.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:G}});
   addImg(im,S.closing.logo,0.06,0.12,0.6,0.6);
-  im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
-  im.addText('Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+  im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+  im.addText('Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
   im.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
   addImg(im,S.impact.photo,0.45,1.25,1.35,1.35);
-  im.addText(S.impact.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,bold:true,color:'14261b'});
-  im.addText(S.impact.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,color:'1a2b22',valign:'top'});
+  im.addText(S.impact.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
+  im.addText(S.impact.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
   if(S.impact.graphic) addImg(im,S.impact.graphic,6,7.8,0.9,0.9);
 
   // Opportunities
@@ -1133,14 +1185,17 @@ async function exportPPTX(){
     let op = pptx.addSlide(); op.background={color:B};
     op.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
     addImg(op,S.closing.logo,0.06,0.12,0.6,0.6);
-    op.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
-    op.addText('Opportunities',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,color:'FFFFFF',align:'right'});
+    op.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    op.addText('Opportunities',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+    const opportunitySlot=Math.min(1.42, 7.6/Math.max(1,S.opportunities.length));
+    const opportunityBar=Math.min(0.52, opportunitySlot*0.42);
+    const opportunityLink=Math.min(0.38, opportunitySlot*0.3);
     S.opportunities.forEach((o,i)=>{
-      const y=1.3+i*1.42;
-      op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y,w:6.6,h:0.52,fill:{color:O},rectRadius:0.08});
-      op.addText(`${i+1}. ${o.title}`,{x:0.55,y,w:6.4,h:0.52,fontSize:9,bold:true,color:'FFFFFF',valign:'middle'});
-      op.addText(o.link,{x:0.55,y:y+0.54,w:6.4,h:0.38,fontSize:7.5,color:'0b57d0',hyperlink:{url:o.link}});
+      const y=1.25+i*opportunitySlot;
+      op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y,w:6.6,h:opportunityBar,fill:{color:O},rectRadius:0.08});
+      op.addText(`${i+1}. ${o.title}`,{x:0.55,y,w:6.4,h:opportunityBar,fontSize:9,fit:'shrink',bold:true,color:'FFFFFF',valign:'middle'});
+      op.addText(o.link,{x:0.55,y:y+opportunityBar+0.02,w:6.4,h:opportunityLink,fontSize:7.5,fit:'shrink',color:'0b57d0',hyperlink:{url:o.link}});
     });
   }
 
@@ -1148,20 +1203,20 @@ async function exportPPTX(){
   let c = pptx.addSlide(); c.background={color:B};
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
   addImg(c,S.closing.logo,0.06,0.12,0.6,0.6);
-  c.addText(monthYear,{x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,bold:true,color:'FFFFFF'});
+  c.addText(monthYear,{x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
   c.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:7.25,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
   if(S.closing.logo) addImg(c,S.closing.logo,3.25,1.2,1,0.6);
-  c.addText(S.closing.about,{x:0.45,y:1.9,w:6.6,h:1.45,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
-  c.addText('Our Mission',{x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,bold:true,color:'14261b',align:'center'});
-  c.addText(S.closing.mission,{x:0.45,y:3.82,w:6.6,h:0.85,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
-  c.addText('Our Vision',{x:0.45,y:4.78,w:6.6,h:0.32,fontSize:11,bold:true,color:'14261b',align:'center'});
-  c.addText(S.closing.vision,{x:0.45,y:5.10,w:6.6,h:0.85,fontSize:7.5,color:'1a2b22',align:'center',valign:'top'});
-  c.addText('FOLLOW US ON SOCIAL MEDIA',{x:0.45,y:6.15,w:6.6,h:0.32,fontSize:9,bold:true,color:'14261b',align:'center'});
-  c.addText(`Odyssey Educational Foundation   ${S.closing.social}`,{x:0.45,y:6.5,w:6.6,h:0.32,fontSize:8,color:'1a2b22',align:'center'});
-  c.addText(`📍 ${S.closing.address}`,{x:0.45,y:6.92,w:6.6,h:0.32,fontSize:7,color:'1a2b22',align:'center'});
-  c.addText('Thank you for reading!',{x:0.45,y:7.55,w:6.6,h:0.5,fontSize:16,bold:true,color:'FFFFFF',align:'center'});
+  c.addText(S.closing.about,{x:0.45,y:1.9,w:6.6,h:1.45,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
+  c.addText('Our Mission',{x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
+  c.addText(S.closing.mission,{x:0.45,y:3.82,w:6.6,h:0.85,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
+  c.addText('Our Vision',{x:0.45,y:4.78,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
+  c.addText(S.closing.vision,{x:0.45,y:5.10,w:6.6,h:0.85,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
+  c.addText('FOLLOW US ON SOCIAL MEDIA',{x:0.45,y:6.15,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'14261b',align:'center'});
+  c.addText(`Odyssey Educational Foundation   ${S.closing.social}`,{x:0.45,y:6.5,w:6.6,h:0.32,fontSize:8,fit:'shrink',color:'1a2b22',align:'center'});
+  c.addText(`📍 ${S.closing.address}`,{x:0.45,y:6.92,w:6.6,h:0.32,fontSize:7,fit:'shrink',color:'1a2b22',align:'center'});
+  c.addText('Thank you for reading!',{x:0.45,y:7.55,w:6.6,h:0.5,fontSize:16,fit:'shrink',bold:true,color:'FFFFFF',align:'center'});
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:9.35,w:7.5,h:0.65,fill:{color:O}});
-  c.addText(`🌐 ${S.closing.website}     ✉ ${S.closing.email}     📞 ${S.closing.phone}`,{x:0.2,y:9.48,w:7.1,h:0.4,fontSize:7.5,color:'FFFFFF',align:'center'});
+  c.addText(`🌐 ${S.closing.website}     ✉ ${S.closing.email}     📞 ${S.closing.phone}`,{x:0.2,y:9.48,w:7.1,h:0.4,fontSize:7.5,fit:'shrink',color:'FFFFFF',align:'center'});
 
   await pptx.writeFile({fileName:`Odyssey_Newsletter_${S.monthLabel.replace(/\s+/g,'_')}_${S.year}.pptx`});
   }catch(e){ console.error(e); alert("Canva export failed: "+e.message); } finally{ if(btn) btn.textContent="🎨 Export to Canva (.pptx)"; }
