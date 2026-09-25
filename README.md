@@ -16,4 +16,8 @@ Drop reports/documents → newsletter auto-builds.
 
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 
+## Text and image controls
+- Text fields update the preview without rebuilding the form, so names and long text can be typed continuously without losing focus.
+- Every image slot now has both **Adjust frame** and **Remove image** controls, including cover images/graphics, cover tiles, event photos/icons, volunteer/impact photos, and the logo.
+
 Local: `C:\Users\itoha\odyssey-newsletter-fully-automated\index.html`
