@@ -26,6 +26,7 @@ Uploaded report text is automatically adapted into newsletter-style paragraphs: 
 ## AI Text Optimizer & Summarizer
 Use the AI panel to upload a report, choose Event / Volunteer / Impact, choose a summary length, click **Optimize & summarize**, review the result, then click **Insert into newsletter**. It preserves names, dates, numbers, quotations and outcomes while removing report clutter.
 
-Without an API connection, the privacy-friendly on-device newsletter adapter is used. For higher-quality AI rewriting, open **Optional AI connection** and provide an OpenAI-compatible endpoint, model, and temporary API key. The key is held only in the current browser tab and is not saved in project files.
+- **Select text to summarize:** after a report is uploaded, highlight any passage in the source text box and click **Summarize selected text**. Use **Select all text** to summarize the complete source, or **Clear selection** to switch back.
+- Without an API connection, the privacy-friendly on-device newsletter adapter is used. For higher-quality AI rewriting, open **Optional AI connection** and provide an OpenAI-compatible endpoint, model, and temporary API key. The key is held only in the current browser tab and is not saved in project files.
 
 Local: `C:\Users\itoha\odyssey-newsletter-fully-automated\index.html`

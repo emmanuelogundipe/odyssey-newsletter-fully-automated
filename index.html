@@ -55,6 +55,10 @@ input[type=file]{width:100%;font-size:11.5px}
 .image-tools .btn-danger{color:#fff;background:#d64545}
 .ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .ai-output{min-height:170px;background:#f8fbfa!important}
+.selection-tools{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin:8px 0}
+.selection-tools .btn{white-space:nowrap}
+.selection-info{font-size:11px;color:#4e6258;margin-left:auto}
+.selection-preview{font-size:11px;line-height:1.45;color:#32483b;background:#eef8f1;border:1px dashed #9cc5aa;border-radius:8px;padding:8px;margin-bottom:8px;max-height:100px;overflow:auto}
 #aiStatus{font-size:11px;color:#4e6258;margin-top:7px;line-height:1.4}
 .ai-settings{margin-top:10px;border-top:1px solid #dfe8e3;padding-top:8px}
 .ai-settings summary{cursor:pointer;font-weight:700;font-size:11.5px;color:#365a46}
@@ -150,6 +154,16 @@ const S = {
   year: "2026",
   colors:{ green:"#3EAE5B", orange:"#F5822A", blue:"#BFE4F7", light:"#EAF6FD" },
   autoRewrite: true,
+  imageHistory: {},
+  aiSection: "event",
+  aiLength: "standard",
+  aiTitle: "",
+  aiDraft: "",
+  aiSelectedText: "",
+  aiOutput: "",
+  aiStatus: "Upload a report or paste text to begin.",
+  aiEndpoint: "https://api.openai.com/v1/chat/completions",
+  aiModel: "gpt-4o-mini",
   cover:{
     banner:"", feature:"",
     headline:"Here's what has happened in the last month.",
@@ -509,6 +523,46 @@ let aiApiKey = "";
 let aiExtractedImages = [];
 
 function setAiStatus(message){ S.aiStatus = message; const el=document.getElementById('aiStatus'); if(el) el.textContent=message; }
+function aiSelectionInfo(){
+  const selected=String(S.aiSelectedText || '').trim();
+  if(!selected) return 'Select text in the source box to summarize only that part';
+  const words=selected.split(/\s+/).filter(Boolean).length;
+  return words + (words === 1 ? ' word selected' : ' words selected');
+}
+function aiSelectionPreview(){
+  const selected=String(S.aiSelectedText || '').trim();
+  if(!selected) return '<i>No text selected yet. Highlight any part of the report above.</i>';
+  const shortened=selected.length > 360 ? selected.slice(0,360).trim() + '…' : selected;
+  return '<b>Selected text:</b> ' + esc(shortened);
+}
+function updateAiSelection(textarea){
+  if(!textarea) return;
+  const start=textarea.selectionStart;
+  const end=textarea.selectionEnd;
+  S.aiSelectedText=(start !== end) ? textarea.value.slice(start,end) : '';
+  const info=document.getElementById('aiSelectionInfo');
+  const preview=document.getElementById('aiSelectionPreview');
+  if(info) info.textContent=aiSelectionInfo();
+  if(preview) preview.innerHTML=aiSelectionPreview();
+}
+function selectAllAiText(){
+  const area=document.getElementById('aiDraft');
+  if(!area) return;
+  area.focus(); area.select(); updateAiSelection(area);
+}
+function clearAiSelection(){
+  const area=document.getElementById('aiDraft');
+  if(area){ area.focus(); area.setSelectionRange(0,0); }
+  S.aiSelectedText='';
+  updateAiSelection(area);
+}
+function summarizeSelectedText(){
+  const area=document.getElementById('aiDraft');
+  updateAiSelection(area);
+  const selected=String(S.aiSelectedText || '').trim();
+  if(!selected){ setAiStatus('⚠️ Highlight the text you want to summarize first.'); return; }
+  optimizeAiText(selected);
+}
 
 async function readDocumentForAi(file){
   const name=file.name.toLowerCase();
@@ -542,7 +596,9 @@ async function handleAiFile(input){
     const result=await readDocumentForAi(file);
     aiExtractedImages=result.images || [];
     S.aiDraft=result.text || '';
-    S.aiTitle=S.aiTitle || file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
+    S.aiSelectedText='';
+    const titleMatch=String(result.text || '').match(/(?:Title|Event|Heading|Subject)\s*:\s*(.+)/i);
+    S.aiTitle=titleMatch ? titleMatch[1].split(/\r?\n/)[0].trim() : file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
     S.aiOutput='';
     setAiStatus('✅ ' + file.name + ' loaded. Review the text, then click Optimize & summarize.');
     renderAll();
@@ -565,21 +621,23 @@ function aiLengthInstruction(){
   return 'Write 2–4 polished paragraphs, approximately 220–320 words total.';
 }
 
-async function optimizeAiText(){
-  const source=String(S.aiDraft || '').trim();
+async function optimizeAiText(sourceOverride){
+  const source=String(sourceOverride !== undefined ? sourceOverride : (S.aiDraft || '')).trim();
+  const selectedOnly=sourceOverride !== undefined;
   if(!source){ setAiStatus('⚠️ Upload a document or paste report text first.'); return ''; }
   const title=cleanNewsletterTitle(S.aiTitle || 'Newsletter story');
   const local=newsletterRewrite(source, S.aiSection, title);
   S.aiOutput=local;
   const hasRemoteAi=Boolean(aiApiKey && S.aiEndpoint);
   if(!hasRemoteAi){
-    setAiStatus('✍️ On-device newsletter optimizer completed. Add an optional AI connection below for more natural AI rewriting.');
+    setAiStatus((selectedOnly ? '✍️ Selected text summarized on-device. ' : '✍️ On-device newsletter optimizer completed. ') + 'Add an optional AI connection below for more natural AI rewriting.');
     renderAll();
     return local;
   }
 
-  setAiStatus('⏳ AI is rewriting the report…');
-  const prompt=`You are the copy editor for Odyssey Educational Foundation's monthly newsletter. Rewrite the report below into polished, warm, professional newsletter copy for a ${S.aiSection === 'event' ? 'recent event' : S.aiSection === 'volunteer' ? 'volunteer or intern spotlight' : 'personal impact story'}. ${aiLengthInstruction()} Preserve every factual name, date, number, outcome, quotation and meaningful detail. Do not invent facts. Remove report headings, administrative language, recommendations, repetition and bullet formatting. Use complete paragraphs only; do not add a title or commentary. Return only the finished newsletter copy.\\n\\nREPORT TITLE: ${title}\\n\\nREPORT:\\n${source}`;
+  setAiStatus(selectedOnly ? '⏳ AI is summarizing only the selected text…' : '⏳ AI is rewriting the full report…');
+  const sourceLabel=selectedOnly ? 'SELECTED TEXT' : 'REPORT';
+  const prompt=`You are the copy editor for Odyssey Educational Foundation's monthly newsletter. Rewrite the ${selectedOnly ? 'selected text' : 'report'} below into polished, warm, professional newsletter copy for a ${S.aiSection === 'event' ? 'recent event' : S.aiSection === 'volunteer' ? 'volunteer or intern spotlight' : 'personal impact story'}. ${aiLengthInstruction()} Preserve every factual name, date, number, outcome, quotation and meaningful detail. Do not invent facts. Remove report headings, administrative language, recommendations, repetition and bullet formatting. Use complete paragraphs only; do not add a title or commentary. Return only the finished newsletter copy.\\n\\nREPORT TITLE: ${title}\\n\\n${sourceLabel}:\\n${source}`;
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(), 90000);
   try{
@@ -590,10 +648,10 @@ async function optimizeAiText(){
     const remote=typeof message==='string' ? message : (data.output_text || '');
     if(!remote) throw new Error('AI endpoint returned no text');
     S.aiOutput=cleanAiOutput(remote);
-    setAiStatus('✨ AI rewrite complete. Review the optimized copy, then insert it into the newsletter.');
+    setAiStatus(selectedOnly ? '✨ Selected text summarized. Review it, then insert it into the newsletter.' : '✨ AI rewrite complete. Review the optimized copy, then insert it into the newsletter.');
   }catch(error){
     S.aiOutput=local;
-    setAiStatus('⚠️ AI connection was unavailable (' + error.message + '). The private on-device optimizer result is ready instead.');
+    setAiStatus('⚠️ AI connection was unavailable (' + error.message + '). The private on-device ' + (selectedOnly ? 'selected-text summary' : 'optimizer result') + ' is ready instead.');
   }finally{
     clearTimeout(timer);
     renderAll();
@@ -602,7 +660,7 @@ async function optimizeAiText(){
 }
 
 async function insertOptimizedText(){
-  if(!String(S.aiOutput || '').trim()) await optimizeAiText();
+  if(!String(S.aiOutput || '').trim()) await optimizeAiText(String(S.aiSelectedText || '').trim() || undefined);
   const body=cleanAiOutput(S.aiOutput);
   if(!body) { setAiStatus('⚠️ There is no optimized text to insert.'); return; }
   const title=cleanNewsletterTitle(S.aiTitle || body.slice(0,80));
@@ -704,8 +762,10 @@ function renderControls(){
     </div>
     <label>Title / name for the generated page</label><input type="text" value="${escField(S.aiTitle)}" placeholder="e.g. DroneHER Programme or Emmanuella Olufiade" oninput="S.aiTitle=this.value">
     <label>Upload report or document</label><input type="file" accept=".docx,.pdf,.txt,.md" onchange="handleAiFile(this)">
-    <label>Or paste report text</label><textarea class="ai-output" placeholder="Paste the report text here…" oninput="S.aiDraft=this.value">${escField(S.aiDraft)}</textarea>
-    <div class="actions"><button class="btn btn-primary" onclick="optimizeAiText()">✨ Optimize &amp; summarize</button><button class="btn btn-green" onclick="insertOptimizedText()">Insert into newsletter</button></div>
+    <label>Source report text — select any text to summarize</label><textarea id="aiDraft" class="ai-output" placeholder="Paste the report text here…" oninput="S.aiDraft=this.value;updateAiSelection(this)" onselect="updateAiSelection(this)" onmouseup="updateAiSelection(this)" onkeyup="updateAiSelection(this)">${escField(S.aiDraft)}</textarea>
+    <div class="selection-tools"><button class="btn btn-ghost btn-small" type="button" onclick="selectAllAiText()">Select all text</button><button class="btn btn-ghost btn-small" type="button" onclick="clearAiSelection()">Clear selection</button><button class="btn btn-primary btn-small" type="button" onclick="summarizeSelectedText()">✨ Summarize selected text</button><span id="aiSelectionInfo" class="selection-info">${aiSelectionInfo()}</span></div>
+    <div id="aiSelectionPreview" class="selection-preview">${aiSelectionPreview()}</div>
+    <div class="actions"><button class="btn btn-primary" onclick="optimizeAiText()">✨ Optimize &amp; summarize full text</button><button class="btn btn-green" onclick="insertOptimizedText()">Insert into newsletter</button></div>
     <label>Optimized newsletter copy</label><textarea id="aiOutput" class="ai-output" readonly placeholder="Your polished newsletter text will appear here…">${escField(S.aiOutput)}</textarea>
     <div id="aiStatus">${esc(S.aiStatus)}</div>
     <details class="ai-settings"><summary>Optional AI connection</summary>
