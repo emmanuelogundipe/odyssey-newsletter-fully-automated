@@ -21,5 +21,11 @@ Uploaded report text is automatically adapted into newsletter-style paragraphs: 
 ## Text and image controls
 - Text fields update the preview without rebuilding the form, so names and long text can be typed continuously without losing focus.
 - Every image slot now has both **Adjust frame** and **Remove image** controls, including cover images/graphics, cover tiles, event photos/icons, volunteer/impact photos, and the logo.
+- Removed images are kept in a short session history. Use **↩ Restore last image** to restore the deleted version; replacing an image or saving a crop also creates a restorable version.
+
+## AI Text Optimizer & Summarizer
+Use the AI panel to upload a report, choose Event / Volunteer / Impact, choose a summary length, click **Optimize & summarize**, review the result, then click **Insert into newsletter**. It preserves names, dates, numbers, quotations and outcomes while removing report clutter.
+
+Without an API connection, the privacy-friendly on-device newsletter adapter is used. For higher-quality AI rewriting, open **Optional AI connection** and provide an OpenAI-compatible endpoint, model, and temporary API key. The key is held only in the current browser tab and is not saved in project files.
 
 Local: `C:\Users\itoha\odyssey-newsletter-fully-automated\index.html`

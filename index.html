@@ -53,6 +53,12 @@ input[type=file]{width:100%;font-size:11.5px}
 .image-tools{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .image-tools .btn{flex:1;min-width:116px}
 .image-tools .btn-danger{color:#fff;background:#d64545}
+.ai-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ai-output{min-height:170px;background:#f8fbfa!important}
+#aiStatus{font-size:11px;color:#4e6258;margin-top:7px;line-height:1.4}
+.ai-settings{margin-top:10px;border-top:1px solid #dfe8e3;padding-top:8px}
+.ai-settings summary{cursor:pointer;font-weight:700;font-size:11.5px;color:#365a46}
+@media(max-width:800px){.ai-grid{grid-template-columns:1fr}}
 .sep{height:1px;background:#e8eeee;margin:12px 0}
 .kv{display:flex;justify-content:space-between;font-size:11px;color:#5a6b62}
 .color-row{display:flex;gap:8px;align-items:center;margin-top:6px}
@@ -191,6 +197,7 @@ function imgTag(src, cls, h){
   return `<div class="${cls}" style="background:#d6e2dd;color:#6b8079;display:flex;align-items:center;justify-content:center;font-size:10px;border:1px dashed #b9c9c2;${cls.includes('cover')?'height:120px':''}${cls.includes('event')?'height:92px':''}${cls.includes('thumb')?'height:72px':''}">no image</div>`;
 }
 function esc(s){ return (s||"").replace(/</g,"&lt;").replace(/\n/g,"<br>"); }
+function escField(s){ return String(s==null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 
 // ---------- Automatic newsletter copy adaptation ----------
@@ -398,9 +405,9 @@ async function parseAndAutoRoute(file, isFirst){
   title=cleanNewsletterTitle(title).slice(0,120); body=newsletterRewrite(body, route, title);
   if(S.autoRewrite) logAuto("✍️ Rewrote the report into newsletter paragraphs.");
   if(route==="volunteer"){
-    const nM=text.match(/Name\s*:\s*(.+)/i); S.volunteer.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.volunteer.bio=body.slice(0,2000); if(images[0]) S.volunteer.photo=images[0]; logAuto(`→ Volunteer: ${S.volunteer.name}`);
+    const nM=text.match(/Name\s*:\s*(.+)/i); S.volunteer.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.volunteer.bio=body.slice(0,2000); if(images[0]) setImage('volunteer',0,'photo',images[0]); logAuto(`→ Volunteer: ${S.volunteer.name}`);
   }else if(route==="impact"){
-    const nM=text.match(/Name\s*:\s*(.+)/i); S.impact.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.impact.story=body.slice(0,3200); if(images[0]) S.impact.photo=images[0]; logAuto(`→ Impact: ${S.impact.name}`);
+    const nM=text.match(/Name\s*:\s*(.+)/i); S.impact.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.impact.story=body.slice(0,3200); if(images[0]) setImage('impact',0,'photo',images[0]); logAuto(`→ Impact: ${S.impact.name}`);
   }else{
     // if first event and default placeholder events exist, replace placeholder on first auto event
     if(S.events.length===4 && S.events[0].title==="Sensational Summer Take-Off Programme" && isFirst) S.events=[];
@@ -421,9 +428,9 @@ function autoSyncMonthFromFiles(files){
 }
 function autoSyncTiles(){
   // Auto-populate the 3 cover tiles from first event/volunteer/impact images
-  if(S.events[0]?.img1) S.updates[0].img=S.events[0].img1;
-  if(S.volunteer.photo) S.updates[1].img=S.volunteer.photo;
-  if(S.impact.photo) S.updates[2].img=S.impact.photo;
+  if(S.events[0]?.img1) setImage('updates',0,'img',S.events[0].img1);
+  if(S.volunteer.photo) setImage('updates',1,'img',S.volunteer.photo);
+  if(S.impact.photo) setImage('updates',2,'img',S.impact.photo);
 }
 function autoBuildDemo(){ logAuto("Demo data already loaded — edit or drop your reports to overwrite."); }
 
@@ -486,37 +493,193 @@ async function parseDocFile(input, target){
     const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
     S.volunteer.name = name.slice(0,60).toUpperCase();
     S.volunteer.bio = body;
-    if(images[0]) S.volunteer.photo = images[0];
+    if(images[0]) setImage('volunteer',0,'photo',images[0]);
   } else if(target==="impact"){
     const nameMatch = text.match(/(?:Name)\s*:\s*(.+)/i);
     const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
     S.impact.name = name.slice(0,60).toUpperCase();
     S.impact.story = body;
-    if(images[0]) S.impact.photo = images[0];
+    if(images[0]) setImage('impact',0,'photo',images[0]);
   }
   render();
 }
 
+// ---------- AI text optimizer / summarizer ----------
+let aiApiKey = "";
+let aiExtractedImages = [];
+
+function setAiStatus(message){ S.aiStatus = message; const el=document.getElementById('aiStatus'); if(el) el.textContent=message; }
+
+async function readDocumentForAi(file){
+  const name=file.name.toLowerCase();
+  let text="", images=[];
+  if(name.endsWith('.docx')){
+    const buf=await file.arrayBuffer();
+    const result=await mammoth.extractRawText({arrayBuffer:buf});
+    text=result.value || '';
+    try{
+      await mammoth.convertToHtml({arrayBuffer:buf}, {convertImage:mammoth.images.imgElement(img=>img.read('base64').then(b64=>{images.push('data:'+img.contentType+';base64,'+b64); return {src:'data:'+img.contentType+';base64,'+b64};}))});
+    }catch(e){}
+  }else if(name.endsWith('.pdf')){
+    const buf=await file.arrayBuffer();
+    const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+    for(let i=1;i<=pdf.numPages;i++){
+      const page=await pdf.getPage(i);
+      const content=await page.getTextContent();
+      text += content.items.map(item=>item.str + (item.hasEOL ? '\n' : ' ')).join('').trim() + '\n\n';
+    }
+  }else{
+    text=await file.text();
+  }
+  return {text:text, images:images};
+}
+
+async function handleAiFile(input){
+  const file=input.files && input.files[0];
+  if(!file) return;
+  setAiStatus('⏳ Reading ' + file.name + '…');
+  try{
+    const result=await readDocumentForAi(file);
+    aiExtractedImages=result.images || [];
+    S.aiDraft=result.text || '';
+    S.aiTitle=S.aiTitle || file.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
+    S.aiOutput='';
+    setAiStatus('✅ ' + file.name + ' loaded. Review the text, then click Optimize & summarize.');
+    renderAll();
+  }catch(error){
+    setAiStatus('⚠️ Could not read this document: ' + error.message);
+  }
+}
+
+function cleanAiOutput(value){
+  let output=String(value || '').trim();
+  output=output.replace(/^```(?:text|markdown)?\s*/i,'').replace(/\s*```$/i,'');
+  output=output.replace(/^\s*#{1,6}\s*[^\n]*\n?/gm,'');
+  output=output.split(/\n{2,}/).map(part=>part.replace(/^\s*[-*•]\s*/gm,'').replace(/[ \t]+/g,' ').trim()).filter(Boolean).join('\n\n');
+  return output;
+}
+
+function aiLengthInstruction(){
+  if(S.aiLength==='concise') return 'Write 2 short paragraphs, approximately 120–180 words total.';
+  if(S.aiLength==='detailed') return 'Write 3–5 polished paragraphs, approximately 350–500 words total.';
+  return 'Write 2–4 polished paragraphs, approximately 220–320 words total.';
+}
+
+async function optimizeAiText(){
+  const source=String(S.aiDraft || '').trim();
+  if(!source){ setAiStatus('⚠️ Upload a document or paste report text first.'); return ''; }
+  const title=cleanNewsletterTitle(S.aiTitle || 'Newsletter story');
+  const local=newsletterRewrite(source, S.aiSection, title);
+  S.aiOutput=local;
+  const hasRemoteAi=Boolean(aiApiKey && S.aiEndpoint);
+  if(!hasRemoteAi){
+    setAiStatus('✍️ On-device newsletter optimizer completed. Add an optional AI connection below for more natural AI rewriting.');
+    renderAll();
+    return local;
+  }
+
+  setAiStatus('⏳ AI is rewriting the report…');
+  const prompt=`You are the copy editor for Odyssey Educational Foundation's monthly newsletter. Rewrite the report below into polished, warm, professional newsletter copy for a ${S.aiSection === 'event' ? 'recent event' : S.aiSection === 'volunteer' ? 'volunteer or intern spotlight' : 'personal impact story'}. ${aiLengthInstruction()} Preserve every factual name, date, number, outcome, quotation and meaningful detail. Do not invent facts. Remove report headings, administrative language, recommendations, repetition and bullet formatting. Use complete paragraphs only; do not add a title or commentary. Return only the finished newsletter copy.\\n\\nREPORT TITLE: ${title}\\n\\nREPORT:\\n${source}`;
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(), 90000);
+  try{
+    const response=await fetch(S.aiEndpoint, {method:'POST', signal:controller.signal, headers:{'Content-Type':'application/json','Authorization':'Bearer '+aiApiKey}, body:JSON.stringify({model:S.aiModel || 'gpt-4o-mini', temperature:0.25, messages:[{role:'system',content:'You write accurate, concise, articulate nonprofit newsletter copy.'},{role:'user',content:prompt}]})});
+    if(!response.ok) throw new Error('AI endpoint returned '+response.status);
+    const data=await response.json();
+    const message=data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    const remote=typeof message==='string' ? message : (data.output_text || '');
+    if(!remote) throw new Error('AI endpoint returned no text');
+    S.aiOutput=cleanAiOutput(remote);
+    setAiStatus('✨ AI rewrite complete. Review the optimized copy, then insert it into the newsletter.');
+  }catch(error){
+    S.aiOutput=local;
+    setAiStatus('⚠️ AI connection was unavailable (' + error.message + '). The private on-device optimizer result is ready instead.');
+  }finally{
+    clearTimeout(timer);
+    renderAll();
+  }
+  return S.aiOutput;
+}
+
+async function insertOptimizedText(){
+  if(!String(S.aiOutput || '').trim()) await optimizeAiText();
+  const body=cleanAiOutput(S.aiOutput);
+  if(!body) { setAiStatus('⚠️ There is no optimized text to insert.'); return; }
+  const title=cleanNewsletterTitle(S.aiTitle || body.slice(0,80));
+  if(S.aiSection==='event'){
+    if(S.events.length===4 && S.events[0].title==='Sensational Summer Take-Off Programme') S.events=[];
+    S.events.push({title:title.slice(0,120), body:body, img1:aiExtractedImages[0]||'', img2:aiExtractedImages[1]||'', icon:'', graphic:''});
+    if(S.cover.intro.includes('In August')) S.cover.intro=newsletterExcerpt(body,380);
+  }else if(S.aiSection==='volunteer'){
+    S.volunteer.name=title.slice(0,60).toUpperCase();
+    S.volunteer.bio=body;
+    if(aiExtractedImages[0]) setImage('volunteer',0,'photo',aiExtractedImages[0]);
+  }else{
+    S.impact.name=title.slice(0,60).toUpperCase();
+    S.impact.story=body;
+    if(aiExtractedImages[0]) setImage('impact',0,'photo',aiExtractedImages[0]);
+  }
+  autoSyncTiles();
+  renderAll();
+  logAuto('✨ Inserted AI-optimized copy into the ' + S.aiSection + ' section.');
+}
+
 // ---------- Image management ----------
+function imageTarget(kind, idx){
+  if(kind === 'cover') return S.cover;
+  if(kind === 'updates') return S.updates[idx];
+  if(kind === 'event') return S.events[idx];
+  if(kind === 'volunteer') return S.volunteer;
+  if(kind === 'impact') return S.impact;
+  if(kind === 'closing') return S.closing;
+  return null;
+}
+function imageHistoryKey(kind, idx, field){ return kind + ':' + idx + ':' + field; }
+function rememberImage(kind, idx, field, value){
+  if(!value) return;
+  if(!S.imageHistory || typeof S.imageHistory !== 'object') S.imageHistory = {};
+  const key = imageHistoryKey(kind, idx, field);
+  if(!Array.isArray(S.imageHistory[key])) S.imageHistory[key] = [];
+  const history = S.imageHistory[key];
+  if(history[history.length - 1] !== value) history.push(value);
+  while(history.length > 3) history.shift();
+}
+function setImage(kind, idx, field, value){
+  const target = imageTarget(kind, idx);
+  if(!target || !Object.prototype.hasOwnProperty.call(target, field)) return;
+  if(target[field] && target[field] !== value) rememberImage(kind, idx, field, target[field]);
+  target[field] = value || '';
+}
+function imageRestoreButton(kind, idx, field){
+  const key = imageHistoryKey(kind, idx, field);
+  const history = S.imageHistory && S.imageHistory[key];
+  if(!Array.isArray(history) || !history.length) return '';
+  return `<button class="btn btn-green btn-small" type="button" onclick="restoreImage('${kind}',${idx},'${field}')">↩ Restore last image</button>`;
+}
 function imageTools(kind, idx, field, aspect, label){
   const cropLabel = label || 'Adjust frame';
   return `<div class="image-tools">
     <button class="btn btn-ghost btn-small" type="button" onclick="openCropFor('${kind}',${idx},'${field}',${aspect})">✂️ ${cropLabel}</button>
     <button class="btn btn-danger btn-small" type="button" onclick="removeImage('${kind}',${idx},'${field}')">🗑 Remove image</button>
+    ${imageRestoreButton(kind, idx, field)}
   </div>`;
 }
 function removeImage(kind, idx, field){
-  let target = null;
-  if(kind === 'cover') target = S.cover;
-  else if(kind === 'updates') target = S.updates[idx];
-  else if(kind === 'event') target = S.events[idx];
-  else if(kind === 'volunteer') target = S.volunteer;
-  else if(kind === 'impact') target = S.impact;
-  else if(kind === 'closing') target = S.closing;
+  const target = imageTarget(kind, idx);
   if(!target || !Object.prototype.hasOwnProperty.call(target, field)) return;
+  rememberImage(kind, idx, field, target[field]);
   target[field] = '';
   renderAll();
-  logAuto('🗑 Removed ' + kind + ' / ' + field + ' image.');
+  logAuto('🗑 Removed ' + kind + ' / ' + field + ' image. You can restore it below.');
+}
+function restoreImage(kind, idx, field){
+  const target = imageTarget(kind, idx);
+  const key = imageHistoryKey(kind, idx, field);
+  const history = S.imageHistory && S.imageHistory[key];
+  if(!target || !Array.isArray(history) || !history.length) return;
+  target[field] = history.pop();
+  renderAll();
+  logAuto('↩ Restored the last ' + kind + ' / ' + field + ' image.');
 }
 
 // ---------- Render Controls ----------
@@ -533,6 +696,26 @@ function renderControls(){
     <small class="hint">Fully automated: month/year, cover intro, events, volunteer & impact are all inferred from filenames + headings + dates + embedded images. Report language is cleaned, condensed and grouped into readable newsletter paragraphs without inventing facts.</small>
   </fieldset>
 
+  <fieldset style="background:linear-gradient(135deg,#fffaf2,#f4faf7);border:2px solid var(--orange)"><legend style="color:var(--green)">✨ AI Text Optimizer &amp; Summarizer</legend>
+    <small class="hint">Upload a report, optimize it into polished newsletter copy, preview the result, then insert it into the newsletter. The optimizer preserves names, dates, figures and outcomes while removing report-style clutter.</small>
+    <div class="ai-grid">
+      <div><label>Insert optimized copy into</label><select onchange="S.aiSection=this.value"><option value="event" ${S.aiSection==='event'?'selected':''}>Event page</option><option value="volunteer" ${S.aiSection==='volunteer'?'selected':''}>Volunteer / Intern Spotlight</option><option value="impact" ${S.aiSection==='impact'?'selected':''}>Impact Story</option></select></div>
+      <div><label>Summary length</label><select onchange="S.aiLength=this.value"><option value="concise" ${S.aiLength==='concise'?'selected':''}>Concise</option><option value="standard" ${S.aiLength==='standard'?'selected':''}>Newsletter standard</option><option value="detailed" ${S.aiLength==='detailed'?'selected':''}>Detailed</option></select></div>
+    </div>
+    <label>Title / name for the generated page</label><input type="text" value="${escField(S.aiTitle)}" placeholder="e.g. DroneHER Programme or Emmanuella Olufiade" oninput="S.aiTitle=this.value">
+    <label>Upload report or document</label><input type="file" accept=".docx,.pdf,.txt,.md" onchange="handleAiFile(this)">
+    <label>Or paste report text</label><textarea class="ai-output" placeholder="Paste the report text here…" oninput="S.aiDraft=this.value">${escField(S.aiDraft)}</textarea>
+    <div class="actions"><button class="btn btn-primary" onclick="optimizeAiText()">✨ Optimize &amp; summarize</button><button class="btn btn-green" onclick="insertOptimizedText()">Insert into newsletter</button></div>
+    <label>Optimized newsletter copy</label><textarea id="aiOutput" class="ai-output" readonly placeholder="Your polished newsletter text will appear here…">${escField(S.aiOutput)}</textarea>
+    <div id="aiStatus">${esc(S.aiStatus)}</div>
+    <details class="ai-settings"><summary>Optional AI connection</summary>
+      <small class="hint">For true AI rewriting, use an OpenAI-compatible endpoint. If left blank, the privacy-friendly on-device newsletter adapter is used. The API key is held only in this browser tab and is not saved in project files.</small>
+      <label>API endpoint</label><input type="url" value="${escField(S.aiEndpoint)}" oninput="S.aiEndpoint=this.value">
+      <label>Model</label><input type="text" value="${escField(S.aiModel)}" oninput="S.aiModel=this.value">
+      <label>API key (not saved)</label><input id="aiApiKey" type="password" value="" placeholder="Paste key only if you want AI rewriting" oninput="aiApiKey=this.value" autocomplete="off">
+    </details>
+  </fieldset>
+
   <fieldset><legend>① Edition — Month syncs everywhere</legend>
     <label>Month / Edition label</label>
     <input type="text" value="${S.monthLabel}" oninput="S.monthLabel=this.value;renderPreviewOnly()">
@@ -543,14 +726,14 @@ function renderControls(){
 
   <fieldset><legend>② Cover page — exact sample layout</legend>
     <label>Top banner image (wide hero behind card)</label>
-    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.banner=v)">
-    ${S.cover.banner?`<img src="${S.cover.banner}" class="thumb">${imageTools('cover',0,'banner',4.2,'Adjust banner frame')}`:``}
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('cover',0,'banner',v))">
+    ${S.cover.banner?`<img src="${S.cover.banner}" class="thumb">${imageTools('cover',0,'banner',4.2,'Adjust banner frame')}`:imageRestoreButton('cover',0,'banner')}
     <label>Feature image (top-right inside card)</label>
-    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.feature=v)">
-    ${S.cover.feature?`<img src="${S.cover.feature}" class="thumb">${imageTools('cover',0,'feature',1.48)}`:``}
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('cover',0,'feature',v))">
+    ${S.cover.feature?`<img src="${S.cover.feature}" class="thumb">${imageTools('cover',0,'feature',1.48)}`:imageRestoreButton('cover',0,'feature')}
     <label>Decorative graphic / icon for cover (optional, per-page element)</label>
-    <input type="file" accept="image/*" onchange="fileToData(this,v=>S.cover.graphic=v)">
-    ${S.cover.graphic?`<img src="${S.cover.graphic}" style="max-height:46px;margin-top:6px">${imageTools('cover',0,'graphic',1.67)}`:``}
+    <input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('cover',0,'graphic',v))">
+    ${S.cover.graphic?`<img src="${S.cover.graphic}" style="max-height:46px;margin-top:6px">${imageTools('cover',0,'graphic',1.67)}`:imageRestoreButton('cover',0,'graphic')}
     <label>Headline</label><input type="text" value="${S.cover.headline}" oninput="S.cover.headline=this.value;renderPreviewOnly()">
     <label>Sub label</label><input type="text" value="${S.cover.sub}" oninput="S.cover.sub=this.value;renderPreviewOnly()">
     <label>Intro paragraph</label><textarea oninput="S.cover.intro=this.value;renderPreviewOnly()">${S.cover.intro}</textarea>
@@ -561,8 +744,8 @@ function renderControls(){
     ${S.updates.map((u,i)=>`
       <div class="block">
         <label>Tile ${i+1} label</label><input type="text" value="${u.label}" oninput="S.updates[${i}].label=this.value;renderPreviewOnly()">
-        <label>Tile ${i+1} image — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.updates[${i}].img=v)">
-        ${u.img?`<img src="${u.img}" class="thumb" style="height:72px">${imageTools('updates',i,'img',1.9)}`:``}
+        <label>Tile ${i+1} image — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('updates',${i},'img',v))">
+        ${u.img?`<img src="${u.img}" class="thumb" style="height:72px">${imageTools('updates',i,'img',1.9)}`:imageRestoreButton('updates',i,'img')}
         <label>Caption</label><textarea oninput="S.updates[${i}].cap=this.value;renderPreviewOnly()">${u.cap}</textarea>
       </div>
     `).join('')}
@@ -579,14 +762,14 @@ function renderControls(){
         <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:12px">Event ${i+1}</b><button class="btn btn-danger btn-small" onclick="S.events.splice(${i},1);render()">Remove</button></div>
         <label>Title</label><input type="text" value="${e.title}" oninput="S.events[${i}].title=this.value;renderPreviewOnly()">
         <label>Summary / body</label><textarea oninput="S.events[${i}].body=this.value;renderPreviewOnly()">${e.body}</textarea>
-        <div class="row2"><div><label>Image 1</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img1=v)">${e.img1?`<img src="${e.img1}" class="thumb" style="height:78px">${imageTools('event',i,'img1',1.39)}`:``}</div>
-        <div><label>Image 2 (wide, optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].img2=v)">${e.img2?`<img src="${e.img2}" class="thumb" style="height:78px">${imageTools('event',i,'img2',2.59)}`:``}</div></div>
+        <div class="row2"><div><label>Image 1</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('event',${i},'img1',v))">${e.img1?`<img src="${e.img1}" class="thumb" style="height:78px">${imageTools('event',i,'img1',1.39)}`:imageRestoreButton('event',i,'img1')}</div>
+        <div><label>Image 2 (wide, optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('event',${i},'img2',v))">${e.img2?`<img src="${e.img2}" class="thumb" style="height:78px">${imageTools('event',i,'img2',2.59)}`:imageRestoreButton('event',i,'img2')}</div></div>
         <label>Icon / element / graphic for THIS event page (optional)</label>
-        <input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].icon=v)">
-        ${e.icon?`<img src="${e.icon}" style="max-height:40px;margin-top:6px">${imageTools('event',i,'icon',1)}`:``}
+        <input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('event',${i},'icon',v))">
+        ${e.icon?`<img src="${e.icon}" style="max-height:40px;margin-top:6px">${imageTools('event',i,'icon',1)}`:imageRestoreButton('event',i,'icon')}
         <label>Extra decorative graphic (bottom, optional)</label>
-        <input type="file" accept="image/*" onchange="fileToData(this,v=>S.events[${i}].graphic=v)">
-        ${e.graphic?`<img src="${e.graphic}" style="max-height:40px;margin-top:6px">${imageTools('event',i,'graphic',1.67)}`:``}
+        <input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('event',${i},'graphic',v))">
+        ${e.graphic?`<img src="${e.graphic}" style="max-height:40px;margin-top:6px">${imageTools('event',i,'graphic',1.67)}`:imageRestoreButton('event',i,'graphic')}
       </div>
     `).join('')}
     <button class="btn btn-green btn-small" style="margin-top:8px" onclick="S.events.push({title:'New Event',body:'',img1:'',img2:'',icon:'',graphic:''});render()">+ Add event page manually</button>
@@ -598,12 +781,12 @@ function renderControls(){
       <input id="volDoc" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" onchange="parseDocFile(this,'volunteer')">
     </div>
     <label>Name</label><input type="text" value="${S.volunteer.name}" oninput="S.volunteer.name=this.value;renderPreviewOnly()">
-    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.photo=v)">
-    ${S.volunteer.photo?`<div><img src="${S.volunteer.photo}" class="thumb-circle" style="margin-top:6px">${imageTools('volunteer',0,'photo',1)}</div>`:``}
+    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('volunteer',0,'photo',v))">
+    ${S.volunteer.photo?`<div><img src="${S.volunteer.photo}" class="thumb-circle" style="margin-top:6px">${imageTools('volunteer',0,'photo',1)}</div>`:imageRestoreButton('volunteer',0,'photo')}
     <label>Bio / journey</label><textarea oninput="S.volunteer.bio=this.value;renderPreviewOnly()">${S.volunteer.bio}</textarea>
     <label>Why we're spotlighting them (highlight box)</label><textarea oninput="S.volunteer.note=this.value;renderPreviewOnly()">${S.volunteer.note}</textarea>
-    <label>Icon / graphic for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.volunteer.icon=v)">
-    ${S.volunteer.icon?`<img src="${S.volunteer.icon}" style="max-height:40px;margin-top:6px">${imageTools('volunteer',0,'icon',1)}`:``}
+    <label>Icon / graphic for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('volunteer',0,'icon',v))">
+    ${S.volunteer.icon?`<img src="${S.volunteer.icon}" style="max-height:40px;margin-top:6px">${imageTools('volunteer',0,'icon',1)}`:imageRestoreButton('volunteer',0,'icon')}
   </fieldset>
 
   <fieldset><legend>⑥ Impact Story</legend>
@@ -612,11 +795,11 @@ function renderControls(){
       <input id="impDoc" type="file" accept=".docx,.pdf,.txt,.md" style="display:none" onchange="parseDocFile(this,'impact')">
     </div>
     <label>Name</label><input type="text" value="${S.impact.name}" oninput="S.impact.name=this.value;renderPreviewOnly()">
-    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.photo=v)">
-    ${S.impact.photo?`<div><img src="${S.impact.photo}" class="thumb-circle" style="margin-top:6px">${imageTools('impact',0,'photo',1)}</div>`:``}
+    <label>Photo — upload</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('impact',0,'photo',v))">
+    ${S.impact.photo?`<div><img src="${S.impact.photo}" class="thumb-circle" style="margin-top:6px">${imageTools('impact',0,'photo',1)}</div>`:imageRestoreButton('impact',0,'photo')}
     <label>Story text</label><textarea oninput="S.impact.story=this.value;renderPreviewOnly()">${S.impact.story}</textarea>
-    <label>Decorative graphic / icon for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.impact.graphic=v)">
-    ${S.impact.graphic?`<img src="${S.impact.graphic}" style="max-height:46px;margin-top:6px">${imageTools('impact',0,'graphic',1.67)}`:``}
+    <label>Decorative graphic / icon for this page (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('impact',0,'graphic',v))">
+    ${S.impact.graphic?`<img src="${S.impact.graphic}" style="max-height:46px;margin-top:6px">${imageTools('impact',0,'graphic',1.67)}`:imageRestoreButton('impact',0,'graphic')}
   </fieldset>
 
   <fieldset><legend>⑦ Opportunities</legend>
@@ -634,8 +817,8 @@ function renderControls(){
     <label>About text</label><textarea oninput="S.closing.about=this.value;renderPreviewOnly()">${S.closing.about}</textarea>
     <label>Mission</label><textarea oninput="S.closing.mission=this.value;renderPreviewOnly()">${S.closing.mission}</textarea>
     <label>Vision</label><textarea oninput="S.closing.vision=this.value;renderPreviewOnly()">${S.closing.vision}</textarea>
-    <label>Logo / graphic (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>S.closing.logo=v)">
-    ${S.closing.logo?`<div><img src="${S.closing.logo}" style="max-height:44px;margin-top:6px">${imageTools('closing',0,'logo',1.67)}</div>`:``}
+    <label>Logo / graphic (optional)</label><input type="file" accept="image/*" onchange="fileToData(this,v=>setImage('closing',0,'logo',v))">
+    ${S.closing.logo?`<div><img src="${S.closing.logo}" style="max-height:44px;margin-top:6px">${imageTools('closing',0,'logo',1.67)}</div>`:imageRestoreButton('closing',0,'logo')}
     <div class="row2"><div><label>Website</label><input type="text" value="${S.closing.website}" oninput="S.closing.website=this.value;renderPreviewOnly()"></div><div><label>Email</label><input type="text" value="${S.closing.email}" oninput="S.closing.email=this.value;renderPreviewOnly()"></div></div>
     <label>Phone</label><input type="text" value="${S.closing.phone}" oninput="S.closing.phone=this.value;renderPreviewOnly()">
     <label>Social handle</label><input type="text" value="${S.closing.social}" oninput="S.closing.social=this.value;renderPreviewOnly()">
@@ -969,12 +1152,12 @@ function openCropFor(kind, idx, field, aspect){
   else if(kind==='closing') src=S.closing[field];
   if(!src){ alert('Upload an image first, then adjust its frame.'); return; }
   openCrop(src, (data)=>{
-    if(kind==='cover') S.cover[field]=data;
-    else if(kind==='updates') S.updates[idx][field]=data;
-    else if(kind==='event') S.events[idx][field]=data;
-    else if(kind==='volunteer') S.volunteer[field]=data;
-    else if(kind==='impact') S.impact[field]=data;
-    else if(kind==='closing') S.closing[field]=data;
+    if(kind==='cover') setImage(kind,idx,field,data);
+    else if(kind==='updates') setImage(kind,idx,field,data);
+    else if(kind==='event') setImage(kind,idx,field,data);
+    else if(kind==='volunteer') setImage(kind,idx,field,data);
+    else if(kind==='impact') setImage(kind,idx,field,data);
+    else if(kind==='closing') setImage(kind,idx,field,data);
     logAuto && logAuto('✂️ Frame adjusted for '+kind+' '+(field||''));
   }, aspect);
 }
