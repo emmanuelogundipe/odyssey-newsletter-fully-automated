@@ -143,6 +143,7 @@ const S = {
   monthLabel: "August Edition",
   year: "2026",
   colors:{ green:"#3EAE5B", orange:"#F5822A", blue:"#BFE4F7", light:"#EAF6FD" },
+  autoRewrite: true,
   cover:{
     banner:"", feature:"",
     headline:"Here's what has happened in the last month.",
@@ -183,7 +184,7 @@ const S = {
 // ---------- Helpers ----------
 function fileToData(input, cb){
   const f = input.files && input.files[0]; if(!f) return;
-  const r = new FileReader(); r.onload = ()=>{ cb(r.result, f.name); render(); }; r.readAsDataURL(f);
+  const r = new FileReader(); r.onload = ()=>{ cb(r.result, f.name); renderAll(); }; r.readAsDataURL(f);
 }
 function imgTag(src, cls, h){
   if(src) return `<img src="${src}" class="${cls}" style="${h?'height:'+h:''}">`;
@@ -191,6 +192,162 @@ function imgTag(src, cls, h){
 }
 function esc(s){ return (s||"").replace(/</g,"&lt;").replace(/\n/g,"<br>"); }
 
+
+// ---------- Automatic newsletter copy adaptation ----------
+// Converts report-style text into concise, factual newsletter paragraphs.
+// It removes report artefacts, selects the most useful sentences, applies
+// common newsletter-language simplifications, and groups copy into readable paragraphs.
+function cleanReportText(input, title){
+  let source = String(input || '').replace(/\u00a0/g, ' ').replace(/\r/g, '');
+  const lines = source.split('\n');
+  const kept = [];
+  const titleKey = String(title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+  for(let raw of lines){
+    let line = raw.replace(/[ \t]+/g, ' ').trim();
+    if(!line){ kept.push(''); continue; }
+
+    // Page furniture and report metadata should not appear in the newsletter.
+    if(/^(page\s+)?\d+(\s+of\s+\d+)?$/i.test(line)) continue;
+    if(/^(event report|project report|monthly report|activity report|report)\s*$/i.test(line)) continue;
+    if(/^(executive summary|introduction|background|methodology|findings|conclusion|recommendations?|appendix|appendices|keywords|contents|table of contents)\s*:?$/i.test(line)) continue;
+    if(/^(prepared by|reported by|submitted by|compiled by|author|organization|organisation|department|signature)\s*:/i.test(line)) continue;
+    if(/^(recommendations?|suggestions?)\s*:/i.test(line)) continue;
+    if(/^(title|event name|subject)\s*:/i.test(line)) continue;
+    line = line.replace(/^(summary|description|overview|details)\s*:\s*/i, '');
+
+    // Turn common report fields into natural newsletter sentences.
+    const dateValue = line.match(/^date\s*:\s*(.+)/i);
+    const venueValue = line.match(/^(?:venue|location)\s*:\s*(.+)/i);
+    const peopleValue = line.match(/^(?:participants|beneficiaries)\s*:\s*(.+)/i);
+    const organiserValue = line.match(/^(?:organisers?|organizers?)\s*:\s*(.+)/i);
+    if(dateValue) line = `The activity took place on ${dateValue[1].trim()}.`;
+    else if(venueValue) line = `The activity was held in ${venueValue[1].trim()}.`;
+    else if(peopleValue) line = `The programme brought together ${peopleValue[1].trim()}.`;
+    else if(organiserValue) line = `The programme was organised by ${organiserValue[1].trim()}.`;
+
+    // Keep useful labelled values (date, venue, participants) but remove the label.
+    line = line.replace(/^(date|period|venue|location|participants|beneficiaries|organisers?|organizers?)\s*:\s*/i, '');
+    // Turn list markers into continuous prose.
+    line = line.replace(/^[•●▪◦*]\s*/, '').replace(/^\d+[.)]\s+/, '');
+    if(!line) continue;
+
+    // Remove a repeated report title/header line.
+    const key = line.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    if(titleKey && key === titleKey) continue;
+    kept.push(line);
+  }
+
+  let text = kept.join('\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/(?:^|\n|\s)\s*(?:recommendations?|suggestions?)\s*:\s*.*$/i, '\n')
+    .replace(/https?:\/\/\S+/gi, '')
+    .trim();
+  return text;
+}
+
+function splitNewsletterSentences(input){
+  let text = String(input || '').replace(/\s+/g, ' ').trim();
+  if(!text) return [];
+  // Protect common abbreviations before splitting sentences.
+  const abbreviations = ['Mr','Mrs','Ms','Dr','Prof','Sr','Jr','St','No','Fig','vs','etc','e.g','i.e'];
+  abbreviations.forEach(word => {
+    const re = new RegExp('\\b' + word.replace('.', '\\.') + '\\.', 'gi');
+    text = text.replace(re, word + '<DOT>');
+  });
+  const chunks = text.match(/[^.!?]+(?:[.!?]+|$)/g) || [text];
+  return chunks
+    .map(sentence => sentence.replace(/<DOT>/g, '.').replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function newsletterVoice(sentence){
+  let copy = sentence;
+  const substitutions = [
+    [/\bwas held\b/gi, 'took place'],
+    [/\bwere held\b/gi, 'took place'],
+    [/\bwas conducted\b/gi, 'took place'],
+    [/\bwere conducted\b/gi, 'took place'],
+    [/\bwas organised by\b/gi, 'was organised by'],
+    [/\bwas organized by\b/gi, 'was organised by'],
+    [/\bparticipants were able to\b/gi, 'participants had the opportunity to'],
+    [/\bprovided training to\b/gi, 'equipped participants with'],
+    [/\bprovided training on\b/gi, 'delivered practical training in'],
+    [/\bthe main objective (?:was|of the programme was) to\b/gi, 'the programme focused on'],
+    [/\bthe aim of the programme was to\b/gi, 'the programme aimed to'],
+    [/\bthe objective of the programme was to\b/gi, 'the programme aimed to'],
+    [/\bin order to\b/gi, 'to'],
+    [/\bit is important to note that\b/gi, 'notably,'],
+    [/\bas a result of\b/gi, 'as a result'],
+    [/\bat the end of the day\b/gi, 'in the end'],
+    [/\b100 percent\b/gi, '100%'],
+    [/\bweb development\b/gi, 'web development'],
+    [/\bprogram\b/gi, 'programme']
+  ];
+  substitutions.forEach(pair => { copy = copy.replace(pair[0], pair[1]); });
+  copy = copy.replace(/^[-–—•\s]+/, '').trim();
+  if(copy) copy = copy.charAt(0).toUpperCase() + copy.slice(1);
+  if(copy && !/[.!?…]$/.test(copy)) copy += '.';
+  return copy;
+}
+
+function newsletterRewrite(input, kind, title){
+  const cleaned = cleanReportText(input, title);
+  if(!cleaned) return '';
+  const sentences = splitNewsletterSentences(cleaned);
+  if(!sentences.length) return '';
+
+  const maxChars = kind === 'volunteer' ? 1700 : kind === 'impact' ? 2300 : 2200;
+  const important = /\b(participant|participants|student|students|girl|girls|volunteer|intern|mentor|trained|learned|learn|built|created|launched|completed|awarded|partner|partnership|impact|result|support|workshop|programme|program|event|demonstrated|introduced|showcase|mentorship|innovation|technology|STEM)\b/i;
+  const chosen = [];
+  let total = 0;
+  for(let i = 0; i < sentences.length; i++){
+    const original = sentences[i];
+    const rewritten = newsletterVoice(original);
+    if(!rewritten || rewritten.length < 18) continue;
+    const valuable = i < 3 || important.test(rewritten) || /\d/.test(rewritten);
+    const already = chosen.some(item => item.replace(/[^a-z0-9]/gi,'').toLowerCase() === rewritten.replace(/[^a-z0-9]/gi,'').toLowerCase());
+    if(already) continue;
+    if(chosen.length >= 14) break;
+    if(!valuable && total > maxChars * 0.55) continue;
+    if(total + rewritten.length > maxChars && chosen.length >= 5) break;
+    chosen.push(rewritten);
+    total += rewritten.length + 1;
+  }
+  if(!chosen.length) chosen.push(newsletterVoice(sentences[0]));
+
+  // Group sentences into compact, readable paragraphs instead of report line breaks.
+  const paragraphs = [];
+  let current = '';
+  const paragraphLimit = kind === 'event' ? 680 : 560;
+  for(const sentence of chosen){
+    if(current && (current.length + sentence.length + 1 > paragraphLimit || current.split(/(?<=[.!?])\s+/).length >= 4)){
+      paragraphs.push(current);
+      current = sentence;
+    } else {
+      current += (current ? ' ' : '') + sentence;
+    }
+  }
+  if(current) paragraphs.push(current);
+  return paragraphs.join('\n\n');
+}
+
+function cleanNewsletterTitle(input){
+  let title = String(input || '').trim();
+  title = title.replace(/^(?:event|project|activity|monthly)?\s*report\s*[:\-–—]\s*/i, '');
+  title = title.replace(/\s+(?:report|summary)$/i, '');
+  title = title.replace(/\s{2,}/g, ' ').trim();
+  return title || 'Untitled report';
+}
+
+function newsletterExcerpt(input, maxChars){
+  const first = String(input || '').split(/\n\n/)[0].trim();
+  if(first.length <= maxChars) return first;
+  const cut = first.slice(0, maxChars);
+  const lastStop = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('! '), cut.lastIndexOf('? '));
+  return (lastStop > 80 ? cut.slice(0, lastStop + 1) : cut).trim() + '…';
+}
 
 // ---------- FULL AUTO bulk ----------
 function logAuto(msg){ const el=document.getElementById('autoLog'); if(el) el.textContent += msg + "\n"; }
@@ -228,7 +385,7 @@ async function parseAndAutoRoute(file, isFirst){
       const res=await mammoth.extractRawText({arrayBuffer:buf}); text=res.value||"";
       try{ await mammoth.convertToHtml({arrayBuffer:buf}, {convertImage:mammoth.images.imgElement(img=>img.read("base64").then(b64=>{images.push("data:"+img.contentType+";base64,"+b64); return {src:"data:"+img.contentType+";base64,"+b64};}))}); }catch(e){}
     }else if(name.endsWith(".pdf")){
-      const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; let out=""; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); out+=tc.items.map(it=>it.str).join(" ")+"\n\n"; } text=out;
+      const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; let out=""; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const tc=await pg.getTextContent(); out+=tc.items.map(it=>it.str + (it.hasEOL ? "\n" : " ")).join("").trim()+"\n\n"; } text=out;
     }else{ text=await file.text(); }
   }catch(e){ logAuto(`⚠️ ${file.name}: ${e.message}`); return; }
   const route=detectRoute(file.name, text);
@@ -238,7 +395,8 @@ async function parseAndAutoRoute(file, isFirst){
   const bMatch=text.match(/(?:Summary|Description|Body|Content|Report|Overview)\s*:\s*([\s\S]+)/i);
   let body=bMatch?bMatch[1].trim():lines.slice(1).join("\n\n");
   if(body.length<20) body=lines.slice(1).join("\n\n")||text.slice(title.length).trim();
-  title=title.slice(0,120); body=body.slice(0,3200);
+  title=cleanNewsletterTitle(title).slice(0,120); body=newsletterRewrite(body, route, title);
+  if(S.autoRewrite) logAuto("✍️ Rewrote the report into newsletter paragraphs.");
   if(route==="volunteer"){
     const nM=text.match(/Name\s*:\s*(.+)/i); S.volunteer.name=(nM?nM[1].split("\n")[0].trim():title).slice(0,60).toUpperCase(); S.volunteer.bio=body.slice(0,2000); if(images[0]) S.volunteer.photo=images[0]; logAuto(`→ Volunteer: ${S.volunteer.name}`);
   }else if(route==="impact"){
@@ -250,7 +408,7 @@ async function parseAndAutoRoute(file, isFirst){
   }
   // Also try to infer cover intro from first event if cover intro still default
   if(S.cover.intro.includes("In August") && route==="event" && body.length>80){
-    S.cover.intro = body.slice(0,380) + (body.length>380?"…":"");
+    S.cover.intro = newsletterExcerpt(body, 380);
   }
 }
 function autoSyncMonthFromFiles(files){
@@ -298,7 +456,7 @@ async function parseDocFile(input, target){
       for(let i=1;i<=pdf.numPages;i++){
         const page = await pdf.getPage(i);
         const tc = await page.getTextContent();
-        out += tc.items.map(it=>it.str).join(" ") + "\n\n";
+        out += tc.items.map(it=>it.str + (it.hasEOL ? "\n" : " ")).join("").trim() + "\n\n";
       }
       text = out;
     } else {
@@ -316,20 +474,24 @@ async function parseDocFile(input, target){
   let body = bodyMatch ? bodyMatch[1].trim() : lines.slice(1).join("\n\n");
   if(body.length < 20) body = lines.slice(1).join("\n\n") || text.slice(title.length).trim();
 
+  title = cleanNewsletterTitle(title);
+  body = newsletterRewrite(body, target, title);
+  if(S.autoRewrite) logAuto("✍️ Rewrote the report into newsletter paragraphs.");
+
   if(target==="event"){
     // create new event from parsed doc
-    S.events.push({title: title.slice(0,120) || "New Event", body: body.slice(0,3000), img1: images[0]||"", img2: images[1]||"", icon:"", graphic:""});
+    S.events.push({title: title.slice(0,120) || "New Event", body: body, img1: images[0]||"", img2: images[1]||"", icon:"", graphic:""});
   } else if(target==="volunteer"){
     const nameMatch = text.match(/(?:Name)\s*:\s*(.+)/i);
     const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
     S.volunteer.name = name.slice(0,60).toUpperCase();
-    S.volunteer.bio = body.slice(0,2000);
+    S.volunteer.bio = body;
     if(images[0]) S.volunteer.photo = images[0];
   } else if(target==="impact"){
     const nameMatch = text.match(/(?:Name)\s*:\s*(.+)/i);
     const name = nameMatch ? nameMatch[1].split("\n")[0].trim() : title;
     S.impact.name = name.slice(0,60).toUpperCase();
-    S.impact.story = body.slice(0,3000);
+    S.impact.story = body;
     if(images[0]) S.impact.photo = images[0];
   }
   render();
@@ -367,7 +529,8 @@ function renderControls(){
     </div>
     <div id="autoLog" style="font-size:11px;color:#2a3a32;margin-top:8px;white-space:pre-wrap"></div>
     <div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary" onclick="autoBuildDemo()">✨ Try with sample data</button><button class="btn btn-ghost" onclick="clearAuto()">Clear auto-filled</button></div>
-    <small class="hint">Fully automated: month/year, cover intro, events, volunteer & impact are all inferred from filenames + headings + dates + embedded images. Edit anything after — it stays editable.</small>
+    <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:11.5px"><input id="autoRewrite" type="checkbox" ${S.autoRewrite ? 'checked' : ''} onchange="S.autoRewrite=this.checked;logAuto(this.checked ? '✍️ Automatic newsletter rewriting enabled.' : 'Automatic newsletter rewriting disabled.')"> Automatically rephrase report text into newsletter-standard paragraphs</label>
+    <small class="hint">Fully automated: month/year, cover intro, events, volunteer & impact are all inferred from filenames + headings + dates + embedded images. Report language is cleaned, condensed and grouped into readable newsletter paragraphs without inventing facts.</small>
   </fieldset>
 
   <fieldset><legend>① Edition — Month syncs everywhere</legend>

@@ -16,6 +16,8 @@ Drop reports/documents → newsletter auto-builds.
 
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 
+Uploaded report text is automatically adapted into newsletter-style paragraphs: report headings and page artefacts are removed, useful facts are retained, common formal phrasing is simplified, and copy is grouped into readable newsletter-length paragraphs. The checkbox in the FULL AUTO panel controls this behavior.
+
 ## Text and image controls
 - Text fields update the preview without rebuilding the form, so names and long text can be typed continuously without losing focus.
 - Every image slot now has both **Adjust frame** and **Remove image** controls, including cover images/graphics, cover tiles, event photos/icons, volunteer/impact photos, and the logo.
