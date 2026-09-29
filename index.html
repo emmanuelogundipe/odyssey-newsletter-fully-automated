@@ -13,7 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Montserrat:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
   --green:#3EAE5B; --green-dark:#2d8a46;
@@ -23,9 +23,9 @@
   --card-border:#F5822A;
 }
 *{box-sizing:border-box}
-body{margin:0;font-family:'Inter',system-ui,Segoe UI,Arial,sans-serif;background:#eef3f6;color:var(--ink);}
+body{margin:0;font-family:'Poppins',system-ui,Segoe UI,Arial,sans-serif;background:#eef3f6;color:var(--ink);}
 header.top{background:var(--green);color:#fff;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-header.top h1{margin:0;font-family:Montserrat,sans-serif;font-size:18px;letter-spacing:.2px}
+header.top h1{margin:0;font-family:Nunito,sans-serif;font-size:18px;letter-spacing:.2px}
 header.top p{margin:3px 0 0;font-size:12.5px;opacity:.92}
 .badge-live{background:#fff;color:var(--green);padding:6px 10px;border-radius:999px;font-weight:800;font-size:11px}
 .layout{display:flex;min-height:calc(100vh - 70px)}
@@ -82,13 +82,13 @@ input[type=file]{width:100%;font-size:11.5px}
 #preview.exporting .page-shell > .page{position:relative;transform:none;box-shadow:none}
 .page .bar{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800}
 .page .bar.green{background:var(--green)} .page .bar.orange{background:var(--orange)} .page .bar.sky{background:#4FA6D8}
-.page .bar b{font-family:Montserrat,sans-serif;font-size:13px}
+.page .bar b{font-family:Nunito,sans-serif;font-size:13px}
 .page .bar span{font-size:11.5px;opacity:.95}
 .page .content{padding:14px}
 .card{background:var(--light);border:2px solid var(--orange);border-radius:16px;padding:14px}
 .cover-banner{width:100%;height:152px;object-fit:cover;display:block}
 .cover-card{margin:-34px 14px 0;background:#fff;border-radius:14px;padding:14px;position:relative;z-index:2;box-shadow:0 4px 10px rgba(0,0,0,.08)}
-.cover-card h2{margin:0 0 4px;font-family:Montserrat,sans-serif;color:var(--green);font-size:18px;line-height:1.1}
+.cover-card h2{margin:0 0 4px;font-family:Nunito,sans-serif;color:var(--green);font-size:18px;line-height:1.1}
 .cover-meta{font-weight:800;color:#24352e;font-size:11px;letter-spacing:.4px}
 .cover-badge{color:var(--orange);font-weight:800;font-size:13px;margin:2px 0 8px}
 .cover-feature{width:100%;height:148px;object-fit:cover;border-radius:10px;border:3px solid var(--orange);display:block}
@@ -1173,17 +1173,21 @@ const FIT_CONTAIN = 'object-fit:contain';
 const FIT_COVER = 'object-fit:cover';
 
 // The cover is a fixed composition: banner image, overlapping card, caption.
-// Only the banner is flexible, and because it uses object-fit:cover, reducing
-// it crops the image rather than distorting it. Every other element keeps its
-// designed size.
+// Only the two image frames are flexible, and both use object-fit:cover, so
+// reducing them crops the image rather than distorting it. Text, spacing,
+// colours, and the card layout keep their designed values. The banner gives way
+// first, then the feature image, so a long intro or extra update tile can never
+// push the cover past the A4 page edge.
 const COVER_BANNER = Object.freeze({design: 152, min: 88, step: 4});
+const COVER_FEATURE = Object.freeze({design: 148, min: 96, step: 4});
 
 function pageBar(text, tone, monthYear){
   return `<div class="bar ${tone}"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${text}</span></div>`;
 }
 
-function coverPageTemplate(monthYear, bannerHeight){
+function coverPageTemplate(monthYear, bannerHeight, featureHeight){
   const height = bannerHeight || COVER_BANNER.design;
+  const feature = featureHeight || COVER_FEATURE.design;
   return `
     ${S.cover.banner?`<img class="cover-banner" src="${S.cover.banner}" style="height:${height}px">`:`<div class="cover-banner" style="height:${height}px;background:linear-gradient(135deg, ${S.colors.green}, #2a7a3d);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">Upload a banner image on the left</div>`}
     <div class="cover-card">
@@ -1191,7 +1195,7 @@ function coverPageTemplate(monthYear, bannerHeight){
       <div class="cover-meta">${S.cover.sub}</div>
       <div class="cover-badge">${S.monthLabel}</div>
       <h2>${S.cover.headline}</h2>
-      ${S.cover.feature?`<img class="cover-feature" src="${S.cover.feature}">`:`<div class="cover-feature" style="background:#e6eef2;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:11px;border-style:dashed">Upload feature image</div>`}
+      ${S.cover.feature?`<img class="cover-feature" src="${S.cover.feature}" style="height:${feature}px">`:`<div class="cover-feature" style="height:${feature}px;background:#e6eef2;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:11px;border-style:dashed">Upload feature image</div>`}
       ${S.cover.graphic?`<div style="text-align:right;margin-top:6px"><img src="${S.cover.graphic}" style="max-height:38px;${FIT_CONTAIN}"></div>`:``}
       <p style="font-size:11.5px;line-height:1.5;margin:10px 0 0;color:#24352e">${esc(S.cover.intro)}</p>
       <div class="updates-pill">Recent Updates:</div>
@@ -1226,15 +1230,15 @@ function closingPageTemplate(monthYear){
       <div class="card" style="text-align:center">
         ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-bottom:6px;${FIT_CONTAIN}">`:``}
         <p style="font-size:11px;line-height:1.6;margin:0">${esc(S.closing.about)}</p>
-        <h3 style="font-family:Montserrat,sans-serif;margin:14px 0 4px">Our Mission</h3>
+        <h3 style="font-family:Nunito,sans-serif;margin:14px 0 4px">Our Mission</h3>
         <p style="font-size:11px;line-height:1.5;margin:0">${esc(S.closing.mission)}</p>
-        <h3 style="font-family:Montserrat,sans-serif;margin:14px 0 4px">Our Vision</h3>
+        <h3 style="font-family:Nunito,sans-serif;margin:14px 0 4px">Our Vision</h3>
         <p style="font-size:11px;line-height:1.5;margin:0">${esc(S.closing.vision)}</p>
         <div style="margin-top:12px;font-weight:800;font-size:11.5px;letter-spacing:.3px">FOLLOW US ON SOCIAL MEDIA</div>
         <div style="font-size:11px;margin-top:4px">Odyssey Educational Foundation &nbsp; ${S.closing.social}</div>
         <div style="font-size:10.5px;margin-top:6px">📍 ${S.closing.address}</div>
       </div>
-      <div class="footer-thanks" style="font-family:Montserrat,sans-serif;font-weight:800;font-size:16px">Thank you for reading!</div>
+      <div class="footer-thanks" style="font-family:Nunito,sans-serif;font-weight:800;font-size:16px">Thank you for reading!</div>
     </div>
     <div class="footer-contact"><span>🌐 ${S.closing.website}</span><span>✉ ${S.closing.email}</span><span>📞 ${S.closing.phone}</span></div>`;
 }
@@ -1248,7 +1252,7 @@ function eventPageTemplate(page, bodyText, monthYear){
     <div class="content"><div class="card">
       ${hasImages && e.icon ? `<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px;${FIT_CONTAIN}"></div>` : ``}
       ${hasImages ? (e.img1 ? `<img class="event-img" src="${e.img1}">` : `<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`) : ``}
-      <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${title}</h3>
+      <h3 style="margin:0 0 6px;font-size:14px;font-family:Nunito,sans-serif">${title}</h3>
       <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(bodyText)}</p>
       <div class="clear"></div>
       ${hasImages && e.img2 ? `<img class="event-img-wide" src="${e.img2}">` : ``}
@@ -1262,7 +1266,7 @@ function volunteerPageTemplate(page, bodyText, monthYear){
     <div class="content"><div class="card">
       <div class="spot">
         ${page.showPhoto && S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
-        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}${page.continued?' · continued':''}</h3>
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Nunito,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}${page.continued?' · continued':''}</h3>
       </div>
       ${page.showPhoto && S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px;${FIT_CONTAIN}"></div>`:``}
       <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(bodyText)}</p>
@@ -1276,7 +1280,7 @@ function impactPageTemplate(page, bodyText, monthYear){
     <div class="content"><div class="card">
       <div class="spot">
         ${page.showPhoto && S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
-        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}${page.continued?' · continued':''}</h3>
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Nunito,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}${page.continued?' · continued':''}</h3>
       </div>
       <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(bodyText)}</p>
       ${page.showPhoto && S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px;${FIT_CONTAIN}"></div>`:``}
@@ -1294,16 +1298,22 @@ const PAGE_TEMPLATES = {
 // the block, and only the body continues.
 function paginateContentBlock(block, monthYear){
   if(block.type === 'cover'){
-    // The cover is one fixed composition. If a long intro or extra update tile
-    // pushes it past the A4 box, only the flexible banner shrinks (it crops via
-    // object-fit:cover) so the layout and typography stay exactly as designed.
-    let height = COVER_BANNER.design;
-    let used = measureTemplateHeight(coverPageTemplate(monthYear, height));
-    while(used !== null && used > PAGE_GEOMETRY.designHeight && height > COVER_BANNER.min){
-      height = Math.max(COVER_BANNER.min, height - COVER_BANNER.step);
-      used = measureTemplateHeight(coverPageTemplate(monthYear, height));
+    // The cover is one fixed composition. If a long intro or an extra update
+    // tile pushes it past the A4 box, the two image frames shrink in turn
+    // (both use object-fit:cover, so they crop rather than distort). Text,
+    // spacing, and the card layout keep their designed values.
+    let banner = COVER_BANNER.design;
+    let feature = COVER_FEATURE.design;
+    let used = measureTemplateHeight(coverPageTemplate(monthYear, banner, feature));
+    while(used !== null && used > PAGE_GEOMETRY.designHeight){
+      if(banner > COVER_BANNER.min){
+        banner = Math.max(COVER_BANNER.min, banner - COVER_BANNER.step);
+      } else if(feature > COVER_FEATURE.min){
+        feature = Math.max(COVER_FEATURE.min, feature - COVER_FEATURE.step);
+      } else break;
+      used = measureTemplateHeight(coverPageTemplate(monthYear, banner, feature));
     }
-    return [{ kind: 'cover', block, bannerHeight: height, usedHeight: used }];
+    return [{ kind: 'cover', block, bannerHeight: banner, featureHeight: feature, usedHeight: used }];
   }
   if(block.type === 'closing'){
     return [{ kind: 'closing', block, usedHeight: measureTemplateHeight(closingPageTemplate(monthYear)) }];
@@ -1536,7 +1546,7 @@ function renderPreview(){
   const coverPage = newsletterPages.find(page => page.kind === 'cover') || {};
   out += `
   <div class="page" id="page-cover" data-page-kind="cover">
-    ${coverPageTemplate(monthYear, coverPage.bannerHeight)}
+    ${coverPageTemplate(monthYear, coverPage.bannerHeight, coverPage.featureHeight)}
   </div>`;
 
   // EVENTS / VOLUNTEER / IMPACT — rendered from the same page templates the
@@ -1726,9 +1736,11 @@ async function exportPPTX(){
   pptx.title = `Odyssey Newsletter - ${S.monthLabel} ${S.year}`;
   pptx.company = 'Odyssey Educational Foundation';
   pptx.lang = 'en-NG';
-  // Canva may substitute Montserrat/Inter if they are unavailable in the Canva account;
-  // the A4 geometry, hierarchy and element positions remain unchanged.
-  pptx.theme = { headFontFace:'Montserrat', bodyFontFace:'Inter', lang:'en-NG' };
+  // Canva may substitute Nunito/Poppins if they are unavailable in the Canva
+  // account; the A4 geometry, hierarchy and element positions are unchanged.
+  // A PPTX theme alone does not reliably style text in Canva, so every run
+  // also gets an explicit fontFace (see PPTX_HEAD_FONT below).
+  pptx.theme = { headFontFace:'Nunito', bodyFontFace:'Poppins', lang:'en-NG' };
   pptx.rtlMode = false;
   const G = S.colors.green.replace('#',''), O = S.colors.orange.replace('#',''), B = S.colors.blue.replace('#',''), L = S.colors.light.replace('#','');
   const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
@@ -1736,11 +1748,18 @@ async function exportPPTX(){
   const scaleX = PAGE_SIZE.widthIn / legacyCanvas.width;
   const scaleY = PAGE_SIZE.heightIn / legacyCanvas.height;
   const fontScale = scaleX;
+  // Headings use Nunito, body copy uses Poppins, mirroring the CSS families so
+  // the Canva deck matches the preview and the PDF.
+  const PPTX_HEAD_FONT = 'Nunito';
+  const PPTX_BODY_FONT = 'Poppins';
   function mapPptxOptions(options){
     const opts = Object.assign({}, options || {});
     ['x','y','w','h'].forEach(key=>{ if(typeof opts[key] === 'number') opts[key] *= (key==='x' || key==='w') ? scaleX : scaleY; });
     if(typeof opts.fontSize === 'number') opts.fontSize *= fontScale;
     if(typeof opts.rectRadius === 'number') opts.rectRadius *= fontScale;
+    // Set on every run because a theme alone does not style text reliably.
+    opts.fontFace = opts.head ? PPTX_HEAD_FONT : PPTX_BODY_FONT;
+    delete opts.head;
     if(opts.line && typeof opts.line.width === 'number') opts.line = Object.assign({}, opts.line, {width:opts.line.width * fontScale});
     if(opts.sizing){
       const sizing = Object.assign({}, opts.sizing);
@@ -1777,19 +1796,19 @@ async function exportPPTX(){
   if(S.cover.banner) addImg(s,S.cover.banner,0,0,7.5,1.8);
   else s.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:1.8,fill:{color:G}});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.4,w:7,h:6.9,fill:{color:'FFFFFF'},rectRadius:0.2,line:{color:O,width:2}});
-  s.addText(S.cover.sub,{x:0.45,y:1.55,w:3.5,h:0.3,fontSize:9,fit:'shrink',bold:true,color:'2a3a32'});
-  s.addText(S.monthLabel,{x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,fit:'shrink',bold:true,color:O});
-  s.addText(S.cover.headline,{x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,fit:'shrink',bold:true,color:G});
+  s.addText(S.cover.sub,{head:true,x:0.45,y:1.55,w:3.5,h:0.3,fontSize:9,fit:'shrink',bold:true,color:'2a3a32'});
+  s.addText(S.monthLabel,{head:true,x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,fit:'shrink',bold:true,color:O});
+  s.addText(S.cover.headline,{head:true,x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,fit:'shrink',bold:true,color:G});
   addImg(s,S.cover.feature,4.7,1.55,2.45,1.65);
   if(S.cover.graphic) addImg(s,S.cover.graphic,6.2,3.0,0.7,0.7,'contain');
   s.addText(S.cover.intro,{x:0.45,y:3.35,w:6.6,h:1.45,fontSize:8,fit:'shrink',color:'24352e',valign:'top'});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:4.85,w:6.6,h:0.32,fill:{color:G},rectRadius:0.15});
-  s.addText('Recent Updates:',{x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'FFFFFF',align:'center',valign:'middle'});
+  s.addText('Recent Updates:',{head:true,x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'FFFFFF',align:'center',valign:'middle'});
   S.updates.forEach((u,i)=>{
     const x=0.55+i*2.22;
     addImg(s,u.img,x,5.3,2.0,1.05);
     if(!u.img) s.addShape(pptx.shapes.RECTANGLE,{x,y:5.3,w:2,h:1.05,fill:{color:'dde8e3'}});
-    s.addText(u.label,{x,y:6.38,w:2,h:0.28,fontSize:8,fit:'shrink',bold:true,align:'center'});
+    s.addText(u.label,{head:true,x,y:6.38,w:2,h:0.28,fontSize:8,fit:'shrink',bold:true,align:'center'});
     s.addText(u.cap,{x,y:6.66,w:2,h:0.95,fontSize:6,fit:'shrink',color:'33443d',align:'center',valign:'top'});
   });
   addImg(s,S.closing.logo,3.55,8.05,0.4,0.4,'contain');
@@ -1802,13 +1821,13 @@ async function exportPPTX(){
     let sl = newPptxSlide(); sl.background={color:B};
     sl.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:'4FA6D8'}});
     addImg(sl,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
-    sl.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    sl.addText(monthYear,{head:true,x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
     sl.addText(page.continued?'Events · continued':'Events',{x:5.0,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
     if(hasImages && e.icon) addImg(sl,e.icon,6.35,1.15,0.7,0.7,'contain');
     if(hasImages) addImg(sl,e.img1,0.45,1.25,2.15,1.55);
     if(hasImages && !e.img1) sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:1.25,w:2.15,h:1.55,fill:{color:'dde8e3'},rectRadius:0.12});
-    sl.addText(page.continued?`${page.title} (continued)`:page.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,fit:'shrink',bold:true,color:'14261b'});
+    sl.addText(page.continued?`${page.title} (continued)`:page.title,{head:true,x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,fit:'shrink',bold:true,color:'14261b'});
     const hasWideImage=hasImages && Boolean(e.img2);
     sl.addText(page.body,{x:0.45,y:2.95,w:6.6,h:hasWideImage?3.35:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
     if(hasWideImage) addImg(sl,e.img2,0.45,6.5,6.6,2.55);
@@ -1820,11 +1839,11 @@ async function exportPPTX(){
     let v = newPptxSlide(); v.background={color:B};
     v.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
     addImg(v,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
-    v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    v.addText(monthYear,{head:true,x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
     v.addText(page.continued?'Volunteer/Intern Spotlight · continued':'Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,fit:'shrink',bold:true,color:'FFFFFF',align:'right'});
     v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
     if(page.showPhoto) addImg(v,S.volunteer.photo,0.45,1.25,1.35,1.35);
-    v.addText(S.volunteer.name + (page.continued?' · continued':''),{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
+    v.addText(S.volunteer.name + (page.continued?' · continued':''),{head:true,x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
     if(page.showPhoto && S.volunteer.icon) addImg(v,S.volunteer.icon,6.3,1.15,0.75,0.75,'contain');
     v.addText(page.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
     if(page.note){
@@ -1838,11 +1857,11 @@ async function exportPPTX(){
     let im = newPptxSlide(); im.background={color:B};
     im.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:G}});
     addImg(im,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
-    im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    im.addText(monthYear,{head:true,x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
     im.addText(page.continued?'Impact Story · continued':'Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     im.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
     if(page.showPhoto) addImg(im,S.impact.photo,0.45,1.25,1.35,1.35);
-    im.addText(S.impact.name + (page.continued?' · continued':''),{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
+    im.addText(S.impact.name + (page.continued?' · continued':''),{head:true,x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
     im.addText(page.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
     if(page.showPhoto && S.impact.graphic) addImg(im,S.impact.graphic,6,7.8,0.9,0.9,'contain');
   });
@@ -1852,7 +1871,7 @@ async function exportPPTX(){
     let op = newPptxSlide(); op.background={color:B};
     op.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
     addImg(op,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
-    op.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    op.addText(monthYear,{head:true,x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
     op.addText('Opportunities',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
     const opportunitySlot=Math.min(1.42, 7.6/Math.max(1,S.opportunities.length));
@@ -1870,18 +1889,18 @@ async function exportPPTX(){
   let c = newPptxSlide(); c.background={color:B};
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
   addImg(c,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
-  c.addText(monthYear,{x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+  c.addText(monthYear,{head:true,x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
   c.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:7.25,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
   if(S.closing.logo) addImg(c,S.closing.logo,3.25,1.2,1,0.6,'contain');
   c.addText(S.closing.about,{x:0.45,y:1.9,w:6.6,h:1.45,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
-  c.addText('Our Mission',{x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
+  c.addText('Our Mission',{head:true,x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
   c.addText(S.closing.mission,{x:0.45,y:3.82,w:6.6,h:0.85,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
-  c.addText('Our Vision',{x:0.45,y:4.78,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
+  c.addText('Our Vision',{head:true,x:0.45,y:4.78,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
   c.addText(S.closing.vision,{x:0.45,y:5.10,w:6.6,h:0.85,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
   c.addText('FOLLOW US ON SOCIAL MEDIA',{x:0.45,y:6.15,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'14261b',align:'center'});
   c.addText(`Odyssey Educational Foundation   ${S.closing.social}`,{x:0.45,y:6.5,w:6.6,h:0.32,fontSize:8,fit:'shrink',color:'1a2b22',align:'center'});
   c.addText(`📍 ${S.closing.address}`,{x:0.45,y:6.92,w:6.6,h:0.32,fontSize:7,fit:'shrink',color:'1a2b22',align:'center'});
-  c.addText('Thank you for reading!',{x:0.45,y:7.55,w:6.6,h:0.5,fontSize:16,fit:'shrink',bold:true,color:'FFFFFF',align:'center'});
+  c.addText('Thank you for reading!',{head:true,x:0.45,y:7.55,w:6.6,h:0.5,fontSize:16,fit:'shrink',bold:true,color:'FFFFFF',align:'center'});
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:9.35,w:7.5,h:0.65,fill:{color:O}});
   c.addText(`🌐 ${S.closing.website}     ✉ ${S.closing.email}     📞 ${S.closing.phone}`,{x:0.2,y:9.48,w:7.1,h:0.4,fontSize:7.5,fit:'shrink',color:'FFFFFF',align:'center'});
 
@@ -1966,7 +1985,7 @@ render();
 <!-- Cropper modal for adjusting image frame -->
 <div id="cropModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:14px;padding:14px;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;gap:10px;width:720px">
-    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Montserrat,sans-serif">Adjust image frame — drag to pan, scroll/wheel to zoom</b><button class="btn btn-ghost btn-small" onclick="closeCrop()">✕ Close</button></div>
+    <div style="display:flex;justify-content:space-between;align-items:center"><b style="font-family:Nunito,sans-serif">Adjust image frame — drag to pan, scroll/wheel to zoom</b><button class="btn btn-ghost btn-small" onclick="closeCrop()">✕ Close</button></div>
     <div style="flex:1;min-height:260px;max-height:62vh;background:#0f1a14;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:8px"><img id="cropImg" style="max-width:100%;display:block"></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <label style="margin:0">Zoom</label><input type="range" id="cropZoom" min="0.2" max="3" step="0.05" value="1" style="flex:1" oninput="if(window._cropper) window._cropper.zoomTo(this.value)">

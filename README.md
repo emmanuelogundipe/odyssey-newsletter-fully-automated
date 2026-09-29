@@ -31,6 +31,10 @@ Pagination is a measurement engine, not a character counter:
 
 PPTX uses PptxGenJS `sizing: cover/contain` matching the preview's `object-fit`; cropped image data from the frame editor is the canonical source for all three outputs. Export validation reports missing images, low-resolution frames, non-A4 pages, and any content that exceeds the A4 page.
 
+## Fonts
+
+**Nunito** for headings and **Poppins** for body text, used consistently in the preview, the PDF, and the PPTX. In the PPTX the theme is set *and* every text run carries an explicit `fontFace`, because a PPTX theme on its own does not reliably style text after a Canva import. Canva may substitute a font if Nunito or Poppins is unavailable in the account; the A4 geometry, hierarchy, and element positions are unchanged.
+
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 
 Uploaded report text is automatically adapted into newsletter-style paragraphs: report headings and page artefacts are removed, useful facts are retained, common formal phrasing is simplified, and copy is grouped into readable newsletter-length paragraphs. The checkbox in the FULL AUTO panel controls this behavior.
