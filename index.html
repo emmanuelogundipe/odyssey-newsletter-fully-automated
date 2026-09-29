@@ -104,12 +104,14 @@ input[type=file]{width:100%;font-size:11.5px}
 .footer-thanks{color:#fff;text-align:center;padding:10px 12px}
 .footer-contact{display:flex;justify-content:space-between;gap:8px;background:var(--orange);color:#fff;padding:8px 10px;font-size:10px;font-weight:700}
 .print-hide{display:block}
+@page{size:595.5pt 842.25pt;margin:0}
 @media print{
   body *{visibility:hidden}
   .right, .right *{visibility:visible}
   .right{position:absolute;left:0;top:0;width:100%;height:auto;overflow:visible;background:#fff}
   .left, header.top, .print-hide{display:none !important}
-  .page{box-shadow:none;break-inside:avoid;page-break-inside:avoid;margin:0 auto 10px}
+  .page{width:595.5pt;height:842.25pt;min-height:842.25pt;max-height:842.25pt;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;margin:0 auto 0}
+  .page:last-child{break-after:auto;page-break-after:auto}
 }
 
 .help{font-size:11px;background:#fff8ed;border:1px solid #ffdfb5;border-radius:8px;padding:10px;margin-top:8px;color:#5a3d0a}
@@ -143,7 +145,7 @@ code.inline{background:#eef6f1;padding:1px 5px;border-radius:4px;font-size:11px}
         <li>Go to <a href="https://www.canva.com/" target="_blank">canva.com</a> → <b>Create a design → Import file</b> → select the .pptx.</li>
         <li>Every text box, image, icon and colour block is now editable in Canva. Move, replace, or restyle anything.</li>
         <li>Each newsletter page is exported as one PDF page and one Canva slide, with the newsletter structure and fonts preserved.</li>
-        <li>Tip: keep the same A4 vertical layout (7.5 × 10.61 in) so nothing shifts when you import.</li>
+        <li>Tip: the Canva import uses the exact A4 portrait template (8.27 × 11.69 in) so nothing shifts.</li>
       </ol>
       <div class="hint">PPTX is the native Canva-editable format. PDF export is for quick sharing/printing. If you use Canva Teams, you can also “Share → Brand Kit” to lock the green/orange/blue to your brand.</div>
     </div>
@@ -374,7 +376,7 @@ function newsletterExcerpt(input, maxChars){
 }
 
 // ---------- FULL AUTO bulk ----------
-function logAuto(msg){ const el=document.getElementById('autoLog'); if(el) el.textContent += msg + "\n"; }
+function logAuto(msg){ const el=(document && document.getElementById) ? document.getElementById('autoLog') : null; if(el) el.textContent += msg + "\n"; }
 function clearAuto(){ document.getElementById('autoLog').textContent=""; render(); }
 function handleBulkDrop(e){ e.preventDefault(); e.currentTarget.classList.remove('drag'); if(e.dataTransfer.files.length) handleBulkFiles({files:e.dataTransfer.files}); }
 async function handleBulkFiles(input){
@@ -705,11 +707,27 @@ function rememberImage(kind, idx, field, value){
   if(history[history.length - 1] !== value) history.push(value);
   while(history.length > 3) history.shift();
 }
+const IMAGE_FRAME_TARGETS = Object.freeze({
+  banner:[1400,500], feature:[1000,700], graphic:[500,500], img:[700,420],
+  img1:[900,650], img2:[1400,650], icon:[400,400], photo:[500,500], logo:[400,400]
+});
+function checkImageResolution(src, kind, field){
+  if(!src) return;
+  const target=IMAGE_FRAME_TARGETS[field] || IMAGE_FRAME_TARGETS.img;
+  const probe=new Image();
+  probe.onload=()=>{
+    if(probe.naturalWidth < target[0] * 0.75 || probe.naturalHeight < target[1] * 0.75){
+      logAuto('⚠️ Image resolution may be too low for this frame (' + kind + '/' + field + ').');
+    }
+  };
+  probe.src=src;
+}
 function setImage(kind, idx, field, value){
   const target = imageTarget(kind, idx);
   if(!target || !Object.prototype.hasOwnProperty.call(target, field)) return;
   if(target[field] && target[field] !== value) rememberImage(kind, idx, field, target[field]);
   target[field] = value || '';
+  if(target[field]) checkImageResolution(target[field], kind, field);
 }
 function imageRestoreButton(kind, idx, field){
   const key = imageHistoryKey(kind, idx, field);
@@ -923,17 +941,92 @@ function applyColors(){
   document.documentElement.style.setProperty('--light', S.colors.light);
 }
 
+// ---------- Shared page model ----------
+// The reference template is A4 portrait: 595.5pt x 842.25pt.
+const PAGE_SIZE = Object.freeze({
+  widthPt: 595.5,
+  heightPt: 842.25,
+  widthIn: 595.5 / 72,
+  heightIn: 842.25 / 72,
+  widthMm: 210,
+  heightMm: 297
+});
+const PT_PER_INCH = 72;
+const MM_TO_PT = 72 / 25.4;
+const PREVIEW_WIDTH_PX = 540;
+const PREVIEW_HEIGHT_PX = 764;
+const PREVIEW_PX_TO_PT = PAGE_SIZE.widthPt / PREVIEW_WIDTH_PX;
+const PAGE_BUDGET = Object.freeze({event:950, volunteer:700, impact:950});
+
+function splitNewsletterText(text, maxChars){
+  const clean=cleanReportText(text || '', '');
+  if(!clean) return [''];
+  if(clean.length <= maxChars) return [clean];
+  const paragraphs=clean.split(/\n{2,}/).map(part=>part.trim()).filter(Boolean);
+  const chunks=[];
+  let current='';
+  const push=()=>{ if(current.trim()){ chunks.push(current.trim()); current=''; } };
+  paragraphs.forEach(paragraph=>{
+    if(paragraph.length > maxChars){
+      push();
+      const sentences=splitNewsletterSentences(paragraph);
+      sentences.forEach(sentence=>{
+        if((current + ' ' + sentence).trim().length > maxChars && current.trim()) push();
+        if(sentence.length > maxChars){
+          const words=sentence.split(/\s+/);
+          let part='';
+          words.forEach(word=>{
+            if((part+' '+word).trim().length > maxChars && part){ chunks.push(part.trim()); part=word; }
+            else part += (part ? ' ' : '') + word;
+          });
+          if(part.trim()) current=part.trim();
+        }else current += (current ? ' ' : '') + sentence;
+      });
+    }else if((current + '\n\n' + paragraph).trim().length > maxChars && current.trim()){
+      push(); current=paragraph;
+    }else current += (current ? '\n\n' : '') + paragraph;
+  });
+  push();
+  return chunks.length ? chunks : [clean.slice(0,maxChars)];
+}
+
+function buildNewsletterPageModel(){
+  const pages=[{kind:'cover', pageIndex:0}];
+  S.events.forEach((event,eventIndex)=>{
+    const chunks=splitNewsletterText(event.body, PAGE_BUDGET.event);
+    chunks.forEach((body,partIndex)=>pages.push({
+      kind:'event', eventIndex, partIndex, continued:partIndex>0,
+      title:event.title, body, event
+    }));
+  });
+  const volunteerParts=splitNewsletterText(S.volunteer.bio, PAGE_BUDGET.volunteer);
+  volunteerParts.forEach((bio,partIndex)=>pages.push({
+    kind:'volunteer', partIndex, continued:partIndex>0, bio,
+    note:partIndex===volunteerParts.length-1 ? S.volunteer.note : '',
+    showPhoto:partIndex===0
+  }));
+  const impactParts=splitNewsletterText(S.impact.story, PAGE_BUDGET.impact);
+  impactParts.forEach((story,partIndex)=>pages.push({
+    kind:'impact', partIndex, continued:partIndex>0, story,
+    showPhoto:partIndex===0
+  }));
+  if(S.opportunities.length) pages.push({kind:'opportunities'});
+  pages.push({kind:'closing'});
+  return pages.map((page,pageIndex)=>({...page,pageIndex}));
+}
+
 // ---------- Preview ----------
 function renderPreview(){
   const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
+  const newsletterPages = buildNewsletterPageModel();
   let out = "";
 
   // COVER
   out += `
-  <div class="page" id="page-cover">
+  <div class="page" id="page-cover" data-page-kind="cover">
     ${S.cover.banner?`<img class="cover-banner" src="${S.cover.banner}">`:`<div class="cover-banner" style="background:linear-gradient(135deg, ${S.colors.green}, #2a7a3d);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">Upload a banner image on the left</div>`}
     <div class="cover-card">
-      ${S.closing.logo?`<div style="text-align:center;margin-bottom:6px"><img src="${S.closing.logo}" style="width:64px;height:64px;border-radius:50%;background:#fff;padding:3px;border:2px solid ${S.colors.green};object-fit:cover" alt="Odyssey logo"></div>`:``}
+      ${S.closing.logo?`<div style="text-align:center;margin-bottom:6px"><img src="${S.closing.logo}" style="width:64px;height:64px;border-radius:50%;background:#fff;padding:3px;border:2px solid ${S.colors.green};object-fit:contain" alt="Odyssey logo"></div>`:``}
       <div class="cover-meta">${S.cover.sub}</div>
       <div class="cover-badge">${S.monthLabel}</div>
       <h2>${S.cover.headline}</h2>
@@ -954,57 +1047,63 @@ function renderPreview(){
     <div style="text-align:center;padding:8px 0 10px;font-size:10px;color:#2a3a32;font-weight:700">${monthYear} — Odyssey Educational Foundation</div>
   </div>`;
 
-  // EVENTS
-  S.events.forEach(e=>{
+  // EVENTS — one explicit page per event segment
+  newsletterPages.filter(page=>page.kind==='event').forEach(page=>{
+    const e=page.event;
+    const hasImages=!page.continued;
     out += `
-    <div class="page">
-      <div class="bar sky"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover">`:``}<b>${monthYear}</b></span><span>Events</span></div>
+    <div class="page" data-page-kind="event" data-continued="${page.continued}">
+      <div class="bar sky"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Events · continued':'Events'}</span></div>
       <div class="content"><div class="card">
-        ${e.icon?`<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px"></div>`:``}
-        ${e.img1?`<img class="event-img" src="${e.img1}">`:`<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`}
-        <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${e.title}</h3>
-        <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(e.body)}</p>
+        ${hasImages && e.icon?`<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px"></div>`:``}
+        ${hasImages && (e.img1?`<img class="event-img" src="${e.img1}">`:`<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`)}
+        <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${page.continued?`${page.title} (continued)`:page.title}</h3>
+        <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(page.body)}</p>
         <div class="clear"></div>
-        ${e.img2?`<img class="event-img-wide" src="${e.img2}">`:``}
-        ${e.graphic?`<div style="text-align:right;margin-top:8px"><img src="${e.graphic}" style="max-height:38px"></div>`:``}
+        ${hasImages && e.img2?`<img class="event-img-wide" src="${e.img2}">`:``}
+        ${hasImages && e.graphic?`<div style="text-align:right;margin-top:8px"><img src="${e.graphic}" style="max-height:38px"></div>`:``}
       </div></div>
     </div>`;
   });
 
-  // VOLUNTEER
-  out += `
-  <div class="page">
-    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover">`:``}<b>${monthYear}</b></span><span>Volunteer/Intern Spotlight</span></div>
-    <div class="content"><div class="card">
-      <div class="spot">
-        ${S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">photo</div>`}
-        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}</h3>
-      </div>
-      ${S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px"></div>`:``}
-      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(S.volunteer.bio)}</p>
-      <div style="margin-top:10px;background:#fff;border:1px solid #e0e7e4;border-radius:10px;padding:10px;font-size:11.5px;line-height:1.5"><b>${esc(S.volunteer.note)}</b></div>
-    </div></div>
-  </div>`;
+  // VOLUNTEER — explicit profile + continuation pages
+  newsletterPages.filter(page=>page.kind==='volunteer').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="volunteer" data-continued="${page.continued}">
+      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Volunteer/Intern Spotlight · continued':'Volunteer/Intern Spotlight'}</span></div>
+      <div class="content"><div class="card">
+        <div class="spot">
+          ${page.showPhoto && S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
+          <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}${page.continued?' · continued':''}</h3>
+        </div>
+        ${page.showPhoto && S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px"></div>`:``}
+        <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(page.bio)}</p>
+        ${page.note?`<div style="margin-top:10px;background:#fff;border:1px solid #e0e7e4;border-radius:10px;padding:10px;font-size:11.5px;line-height:1.5"><b>${esc(page.note)}</b></div>`:``}
+      </div></div>
+    </div>`;
+  });
 
-  // IMPACT
-  out += `
-  <div class="page">
-    <div class="bar green"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover">`:``}<b>${monthYear}</b></span><span>Impact Story</span></div>
-    <div class="content"><div class="card">
-      <div class="spot">
-        ${S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">photo</div>`}
-        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}</h3>
-      </div>
-      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(S.impact.story)}</p>
-      ${S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px"></div>`:``}
-    </div></div>
-  </div>`;
+  // IMPACT — explicit story + continuation pages
+  newsletterPages.filter(page=>page.kind==='impact').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="impact" data-continued="${page.continued}">
+      <div class="bar green"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Impact Story · continued':'Impact Story'}</span></div>
+      <div class="content"><div class="card">
+        <div class="spot">
+          ${page.showPhoto && S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
+          <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}${page.continued?' · continued':''}</h3>
+        </div>
+        <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(page.story)}</p>
+        ${page.showPhoto && S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px"></div>`:``}
+      </div></div>
+    </div>`;
+  });
 
   // OPPORTUNITIES
   if(S.opportunities.length){
     out += `
     <div class="page">
-      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover">`:``}<b>${monthYear}</b></span><span>Opportunities</span></div>
+      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>Opportunities</span></div>
       <div class="content"><div class="card opp">
         ${S.opportunities.map((o,i)=>`
           <div><div class="opp-item">${i+1}. ${o.title}</div><div class="opp-link"><a href="${o.link}" target="_blank">${o.link}</a></div></div>
@@ -1016,7 +1115,7 @@ function renderPreview(){
   // CLOSING
   out += `
   <div class="page">
-    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:cover">`:``}<b>${monthYear}</b></span><span></span></div>
+    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span></span></div>
     <div class="content">
       <div class="card" style="text-align:center">
         ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-bottom:6px">`:``}
@@ -1041,8 +1140,45 @@ function renderPreviewOnly(){ applyColors(); renderPreview(); }
 function renderAll(){ renderControls(); renderPreview(); applyColors(); }
 function render(){ renderAll(); }
 
+function hexToRgb(hex){
+  const value=String(hex || '').replace('#','');
+  const normalized=value.length===3 ? value.split('').map(ch=>ch+ch).join('') : value;
+  return {r:parseInt(normalized.slice(0,2),16),g:parseInt(normalized.slice(2,4),16),b:parseInt(normalized.slice(4,6),16)};
+}
+
 // ---------- Exports ----------
+function validateExport(){
+  const model=buildNewsletterPageModel();
+  const warnings=[];
+  if(!model.length) warnings.push('No newsletter pages were generated.');
+  model.forEach((page,index)=>{
+    if(page.kind==='cover'){
+      if(!S.cover.banner) warnings.push('Page 1: cover banner image is missing.');
+      if(!S.cover.feature) warnings.push('Page 1: cover feature image is missing.');
+    }
+    if(page.kind==='event'){
+      if(!(page.body||'').trim()) warnings.push(`Page ${index+1}: event text is empty.`);
+      if(!page.continued && page.event && !page.event.img1) warnings.push(`Page ${index+1}: event image 1 is missing.`);
+      if((page.body||'').length > PAGE_BUDGET.event) warnings.push(`Page ${index+1}: event text exceeds the page budget.`);
+    }
+    if(page.kind==='volunteer'){
+      if(!(page.bio||'').trim()) warnings.push(`Page ${index+1}: volunteer text is empty.`);
+      if(page.showPhoto && !S.volunteer.photo) warnings.push(`Page ${index+1}: volunteer photo is missing.`);
+      if((page.bio||'').length > PAGE_BUDGET.volunteer) warnings.push(`Page ${index+1}: volunteer text exceeds the page budget.`);
+    }
+    if(page.kind==='impact'){
+      if(!(page.story||'').trim()) warnings.push(`Page ${index+1}: impact story text is empty.`);
+      if(page.showPhoto && !S.impact.photo) warnings.push(`Page ${index+1}: impact photo is missing.`);
+      if((page.story||'').length > PAGE_BUDGET.impact) warnings.push(`Page ${index+1}: impact text exceeds the page budget.`);
+    }
+  });
+  if(warnings.length){
+    warnings.forEach(message=>{ console.warn(message); if(typeof logAuto==='function') logAuto('⚠️ ' + message); });
+  }
+  return {pageCount:model.length, warnings};
+}
 async function exportPDF(){
+  validateExport();
   const btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
   if(btn) btn.textContent = '⏳ Building PDF…';
   try{
@@ -1055,10 +1191,10 @@ async function exportPDF(){
     if(!pages.length) throw new Error('No newsletter pages found');
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:'a4', compress:true});
+    const pdf = new jsPDF({orientation:'portrait', unit:'pt', format:[PAGE_SIZE.widthPt, PAGE_SIZE.heightPt], compress:true});
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 12;
+    const margin = 0;
     const background = S.colors.blue || '#BFE4F7';
 
     for(let index=0; index<pages.length; index++){
@@ -1081,7 +1217,8 @@ async function exportPDF(){
       const width = canvas.width * ratio;
       const height = canvas.height * ratio;
       if(index > 0) pdf.addPage();
-      pdf.setFillColor(background);
+      const backgroundRgb=hexToRgb(background);
+      pdf.setFillColor(backgroundRgb.r, backgroundRgb.g, backgroundRgb.b);
       pdf.rect(0, 0, pageWidth, pageHeight, 'F');
       pdf.addImage(image, 'JPEG', (pageWidth - width) / 2, (pageHeight - height) / 2, width, height, undefined, 'FAST');
     }
@@ -1095,26 +1232,67 @@ async function exportPDF(){
 }
 
 async function exportPPTX(){
+  validateExport();
   if(typeof PptxGenJS==="undefined"){ alert("Export library still loading — please wait 2s and try again. If offline, check internet."); return; }
   const btn=event && event.target ? event.target : null; if(btn) btn.textContent="⏳ Building...";
   try{
   const pptx = new PptxGenJS();
-  // 7.5 × 10.61 in keeps the Canva import on an A4 portrait canvas.
-  pptx.defineLayout({name:'A4V', width:7.5, height:10.61});
-  pptx.layout='A4V';
+  // The exported slide is the actual A4 template: 595.5pt x 842.25pt.
+  // Legacy design coordinates are converted centrally below; the slide itself is never scaled.
+  pptx.defineLayout({name:'A4', width:PAGE_SIZE.widthIn, height:PAGE_SIZE.heightIn});
+  pptx.layout='A4';
   pptx.author = 'Odyssey Educational Foundation';
   pptx.subject = 'Monthly Newsletter';
   pptx.title = `Odyssey Newsletter - ${S.monthLabel} ${S.year}`;
   pptx.company = 'Odyssey Educational Foundation';
   pptx.lang = 'en-NG';
+  // Canva may substitute Montserrat/Inter if they are unavailable in the Canva account;
+  // the A4 geometry, hierarchy and element positions remain unchanged.
   pptx.theme = { headFontFace:'Montserrat', bodyFontFace:'Inter', lang:'en-NG' };
   pptx.rtlMode = false;
   const G = S.colors.green.replace('#',''), O = S.colors.orange.replace('#',''), B = S.colors.blue.replace('#',''), L = S.colors.light.replace('#','');
   const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
-  function addImg(slide, src, x,y,w,h){ if(src) try{ slide.addImage({data:src,x,y,w,h}); }catch(e){} }
+  const legacyCanvas = {width:7.5, height:10};
+  const scaleX = PAGE_SIZE.widthIn / legacyCanvas.width;
+  const scaleY = PAGE_SIZE.heightIn / legacyCanvas.height;
+  const fontScale = scaleX;
+  function mapPptxOptions(options){
+    const opts = Object.assign({}, options || {});
+    ['x','y','w','h'].forEach(key=>{ if(typeof opts[key] === 'number') opts[key] *= (key==='x' || key==='w') ? scaleX : scaleY; });
+    if(typeof opts.fontSize === 'number') opts.fontSize *= fontScale;
+    if(typeof opts.rectRadius === 'number') opts.rectRadius *= fontScale;
+    if(opts.line && typeof opts.line.width === 'number') opts.line = Object.assign({}, opts.line, {width:opts.line.width * fontScale});
+    if(opts.sizing){
+      const sizing = Object.assign({}, opts.sizing);
+      if(typeof sizing.x === 'number') sizing.x *= scaleX;
+      if(typeof sizing.y === 'number') sizing.y *= scaleY;
+      if(typeof sizing.w === 'number') sizing.w *= scaleX;
+      if(typeof sizing.h === 'number') sizing.h *= scaleY;
+      opts.sizing = sizing;
+    }
+    return opts;
+  }
+  function preparePptxSlide(slide){
+    const addText = slide.addText.bind(slide);
+    const addShape = slide.addShape.bind(slide);
+    const addImage = slide.addImage.bind(slide);
+    slide.addText = (text, options) => addText(text, mapPptxOptions(options));
+    slide.addShape = (type, options) => addShape(type, mapPptxOptions(options));
+    slide.addImage = (options) => addImage(mapPptxOptions(options));
+    return slide;
+  }
+  function newPptxSlide(){ return preparePptxSlide(pptx.addSlide()); }
+  // The cropper stores the final cropped data URL. Preview CSS and PPTX sizing
+  // consume that same source, so cover/contain framing stays consistent.
+  function addImg(slide, src, x,y,w,h, fit='cover'){
+    if(!src) return;
+    try{ slide.addImage({data:src, x, y, w, h, sizing:{type:fit, w, h}}); }
+    catch(error){ console.warn('PPTX image insertion failed:', error); }
+  }
+  const newsletterPages = buildNewsletterPageModel();
 
   // Cover
-  let s = pptx.addSlide(); s.background={color:B};
+  let s = newPptxSlide(); s.background={color:B};
   if(S.cover.banner) addImg(s,S.cover.banner,0,0,7.5,1.8);
   else s.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:1.8,fill:{color:G}});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.4,w:7,h:6.9,fill:{color:'FFFFFF'},rectRadius:0.2,line:{color:O,width:2}});
@@ -1122,7 +1300,7 @@ async function exportPPTX(){
   s.addText(S.monthLabel,{x:0.45,y:1.85,w:3.5,h:0.35,fontSize:13,fit:'shrink',bold:true,color:O});
   s.addText(S.cover.headline,{x:0.45,y:2.2,w:4.1,h:0.7,fontSize:16,fit:'shrink',bold:true,color:G});
   addImg(s,S.cover.feature,4.7,1.55,2.45,1.65);
-  if(S.cover.graphic) addImg(s,S.cover.graphic,6.2,3.0,0.7,0.7);
+  if(S.cover.graphic) addImg(s,S.cover.graphic,6.2,3.0,0.7,0.7,'contain');
   s.addText(S.cover.intro,{x:0.45,y:3.35,w:6.6,h:1.45,fontSize:8,fit:'shrink',color:'24352e',valign:'top'});
   s.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:4.85,w:6.6,h:0.32,fill:{color:G},rectRadius:0.15});
   s.addText('Recent Updates:',{x:0.45,y:4.85,w:6.6,h:0.32,fontSize:9,fit:'shrink',bold:true,color:'FFFFFF',align:'center',valign:'middle'});
@@ -1133,58 +1311,66 @@ async function exportPPTX(){
     s.addText(u.label,{x,y:6.38,w:2,h:0.28,fontSize:8,fit:'shrink',bold:true,align:'center'});
     s.addText(u.cap,{x,y:6.66,w:2,h:0.95,fontSize:6,fit:'shrink',color:'33443d',align:'center',valign:'top'});
   });
-  addImg(s,S.closing.logo,3.55,8.05,0.4,0.4);
+  addImg(s,S.closing.logo,3.55,8.05,0.4,0.4,'contain');
   s.addText(`${monthYear} — Odyssey Educational Foundation`,{x:0.25,y:8.45,w:7,h:0.25,fontSize:7,fit:'shrink',color:'2a3a32',align:'center'});
 
-  // Events
-  S.events.forEach(e=>{
-    let sl = pptx.addSlide(); sl.background={color:B};
+  // Events — one slide per explicit event page segment
+  newsletterPages.filter(page=>page.kind==='event').forEach(page=>{
+    const e=page.event;
+    const hasImages=!page.continued;
+    let sl = newPptxSlide(); sl.background={color:B};
     sl.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:'4FA6D8'}});
-    addImg(sl,S.closing.logo,0.06,0.12,0.6,0.6);
+    addImg(sl,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
     sl.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
-    sl.addText('Events',{x:5.4,y:0.22,w:1.8,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
+    sl.addText(page.continued?'Events · continued':'Events',{x:5.0,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
-    if(e.icon) addImg(sl,e.icon,6.35,1.15,0.7,0.7);
-    addImg(sl,e.img1,0.45,1.25,2.15,1.55);
-    if(!e.img1) sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:1.25,w:2.15,h:1.55,fill:{color:'dde8e3'},rectRadius:0.12});
-    sl.addText(e.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,fit:'shrink',bold:true,color:'14261b'});
-    const hasWideImage=Boolean(e.img2);
-    sl.addText(e.body,{x:0.45,y:2.95,w:6.6,h:hasWideImage?3.35:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
+    if(hasImages && e.icon) addImg(sl,e.icon,6.35,1.15,0.7,0.7,'contain');
+    if(hasImages) addImg(sl,e.img1,0.45,1.25,2.15,1.55);
+    if(hasImages && !e.img1) sl.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:1.25,w:2.15,h:1.55,fill:{color:'dde8e3'},rectRadius:0.12});
+    sl.addText(page.continued?`${page.title} (continued)`:page.title,{x:2.8,y:1.25,w:4.15,h:0.5,fontSize:12,fit:'shrink',bold:true,color:'14261b'});
+    const hasWideImage=hasImages && Boolean(e.img2);
+    sl.addText(page.body,{x:0.45,y:2.95,w:6.6,h:hasWideImage?3.35:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
     if(hasWideImage) addImg(sl,e.img2,0.45,6.5,6.6,2.55);
-    if(e.graphic) addImg(sl,e.graphic,6.35,hasWideImage?8.2:8.7,0.65,0.65);
+    if(hasImages && e.graphic) addImg(sl,e.graphic,6.35,hasWideImage?8.2:8.7,0.65,0.65,'contain');
   });
 
-  // Volunteer
-  let v = pptx.addSlide(); v.background={color:B};
-  v.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
-  addImg(v,S.closing.logo,0.06,0.12,0.6,0.6);
-  v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
-  v.addText('Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,fit:'shrink',bold:true,color:'FFFFFF',align:'right'});
-  v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
-  addImg(v,S.volunteer.photo,0.45,1.25,1.35,1.35);
-  v.addText(S.volunteer.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
-  if(S.volunteer.icon) addImg(v,S.volunteer.icon,6.3,1.15,0.75,0.75);
-  v.addText(S.volunteer.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
-  v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:6,w:6.6,h:2.2,fill:{color:'FFFFFF'},rectRadius:0.12,line:{color:'dfe8e3',width:0.5}});
-  v.addText(S.volunteer.note,{x:0.55,y:6.1,w:6.4,h:2,fontSize:8,fit:'shrink',color:'1a2b22',italic:true,valign:'top'});
+  // Volunteer — one slide per explicit profile segment
+  newsletterPages.filter(page=>page.kind==='volunteer').forEach(page=>{
+    let v = newPptxSlide(); v.background={color:B};
+    v.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
+    addImg(v,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
+    v.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    v.addText(page.continued?'Volunteer/Intern Spotlight · continued':'Volunteer/Intern Spotlight',{x:3.5,y:0.18,w:3.7,h:0.5,fontSize:11,fit:'shrink',bold:true,color:'FFFFFF',align:'right'});
+    v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+    if(page.showPhoto) addImg(v,S.volunteer.photo,0.45,1.25,1.35,1.35);
+    v.addText(S.volunteer.name + (page.continued?' · continued':''),{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
+    if(page.showPhoto && S.volunteer.icon) addImg(v,S.volunteer.icon,6.3,1.15,0.75,0.75,'contain');
+    v.addText(page.bio,{x:0.45,y:2.8,w:6.6,h:3,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
+    if(page.note){
+      v.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.45,y:6,w:6.6,h:2.2,fill:{color:'FFFFFF'},rectRadius:0.12,line:{color:'dfe8e3',width:0.5}});
+      v.addText(page.note,{x:0.55,y:6.1,w:6.4,h:2,fontSize:8,fit:'shrink',color:'1a2b22',italic:true,valign:'top'});
+    }
+  });
 
-  // Impact
-  let im = pptx.addSlide(); im.background={color:B};
-  im.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:G}});
-  addImg(im,S.closing.logo,0.06,0.12,0.6,0.6);
-  im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
-  im.addText('Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
-  im.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
-  addImg(im,S.impact.photo,0.45,1.25,1.35,1.35);
-  im.addText(S.impact.name,{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
-  im.addText(S.impact.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
-  if(S.impact.graphic) addImg(im,S.impact.graphic,6,7.8,0.9,0.9);
+  // Impact — one slide per explicit story segment
+  newsletterPages.filter(page=>page.kind==='impact').forEach(page=>{
+    let im = newPptxSlide(); im.background={color:B};
+    im.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:G}});
+    addImg(im,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
+    im.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
+    im.addText(page.continued?'Impact Story · continued':'Impact Story',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
+    im.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
+    if(page.showPhoto) addImg(im,S.impact.photo,0.45,1.25,1.35,1.35);
+    im.addText(S.impact.name + (page.continued?' · continued':''),{x:2.0,y:1.45,w:4.7,h:0.7,fontSize:14,fit:'shrink',bold:true,color:'14261b'});
+    im.addText(page.story,{x:0.45,y:2.8,w:6.6,h:5.55,fontSize:8,fit:'shrink',color:'1a2b22',valign:'top'});
+    if(page.showPhoto && S.impact.graphic) addImg(im,S.impact.graphic,6,7.8,0.9,0.9,'contain');
+  });
 
   // Opportunities
   if(S.opportunities.length){
-    let op = pptx.addSlide(); op.background={color:B};
+    let op = newPptxSlide(); op.background={color:B};
     op.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
-    addImg(op,S.closing.logo,0.06,0.12,0.6,0.6);
+    addImg(op,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
     op.addText(monthYear,{x:0.7,y:0.22,w:2.8,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
     op.addText('Opportunities',{x:5,y:0.22,w:2.2,h:0.4,fontSize:12,fit:'shrink',color:'FFFFFF',align:'right'});
     op.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:8.55,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
@@ -1200,12 +1386,12 @@ async function exportPPTX(){
   }
 
   // Closing
-  let c = pptx.addSlide(); c.background={color:B};
+  let c = newPptxSlide(); c.background={color:B};
   c.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:7.5,h:0.85,fill:{color:O}});
-  addImg(c,S.closing.logo,0.06,0.12,0.6,0.6);
+  addImg(c,S.closing.logo,0.06,0.12,0.6,0.6,'contain');
   c.addText(monthYear,{x:0.7,y:0.22,w:3.6,h:0.4,fontSize:13,fit:'shrink',bold:true,color:'FFFFFF'});
   c.addShape(pptx.shapes.ROUNDED_RECTANGLE,{x:0.25,y:1.05,w:7,h:7.25,fill:{color:L},rectRadius:0.18,line:{color:O,width:1.5}});
-  if(S.closing.logo) addImg(c,S.closing.logo,3.25,1.2,1,0.6);
+  if(S.closing.logo) addImg(c,S.closing.logo,3.25,1.2,1,0.6,'contain');
   c.addText(S.closing.about,{x:0.45,y:1.9,w:6.6,h:1.45,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
   c.addText('Our Mission',{x:0.45,y:3.5,w:6.6,h:0.32,fontSize:11,fit:'shrink',bold:true,color:'14261b',align:'center'});
   c.addText(S.closing.mission,{x:0.45,y:3.82,w:6.6,h:0.85,fontSize:7.5,fit:'shrink',color:'1a2b22',align:'center',valign:'top'});
@@ -1233,9 +1419,10 @@ function loadJSON(input){
 }
 
 
-let _cropper=null, _cropCb=null;
+let _cropper=null, _cropCb=null, _cropSource='';
 function openCrop(src, cb, aspect){
   _cropCb=cb;
+  _cropSource=src;
   const modal=document.getElementById('cropModal');
   const img=document.getElementById('cropImg');
   img.src=src;
@@ -1251,8 +1438,21 @@ function cropReset(){ if(_cropper) _cropper.reset(); document.getElementById('cr
 function cropAspect(r){ if(_cropper) _cropper.setAspectRatio(r); }
 function cropSave(){
   if(!_cropper||!_cropCb) return closeCrop();
-  const canvas=_cropper.getCroppedCanvas({maxWidth:1600, maxHeight:1600, imageSmoothingQuality:'high'});
-  const data=canvas.toDataURL('image/jpeg', 0.92);
+  const source=document.getElementById('cropImg');
+  const naturalWidth=source.naturalWidth || source.width || 1600;
+  const naturalHeight=source.naturalHeight || source.height || 1200;
+  const maxSide=4000;
+  const qualityScale=Math.min(1, maxSide/Math.max(naturalWidth,naturalHeight));
+  const outputWidth=Math.max(1,Math.round(naturalWidth*qualityScale));
+  const outputHeight=Math.max(1,Math.round(naturalHeight*qualityScale));
+  let canvas;
+  try{
+    canvas=_cropper.getCroppedCanvas({width:outputWidth, height:outputHeight, imageSmoothingQuality:'high'});
+  }catch(error){
+    canvas=_cropper.getCroppedCanvas({maxWidth:1600, maxHeight:1600, imageSmoothingQuality:'high'});
+  }
+  const keepTransparency=/^data:image\/(png|svg\+xml)/i.test(_cropSource);
+  const data=keepTransparency ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.95);
   _cropCb(data);
   closeCrop();
   render();

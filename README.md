@@ -14,6 +14,8 @@ Drop reports/documents → newsletter auto-builds.
 4. Preview updates live — every header still has the **embedded logo** (`C:\Users\itoha\odyssey-newsletter-fully-automated\logo.png` base64).
 5. Edit anything after auto-fill if needed, then **🎨 Export to Canva (.pptx)** (editable in Canva) or **📄 PDF**. Each newsletter page becomes one PDF page / one Canva slide, with the newsletter structure and fonts preserved.
 
+The export pipeline uses the shared A4 page model (`595.5pt × 842.25pt`) and the same explicit page model for preview, PDF, and PPTX. Long event, volunteer, and impact text is split into intentional continuation pages rather than flowing into the next section. PPTX uses PptxGenJS `sizing: cover/contain`, matching the preview's `object-fit`; cropped image data from the frame editor is the canonical source for all three outputs. Export validation reports missing images, low-resolution frames, and text-budget warnings without silently reflowing content.
+
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 
 Uploaded report text is automatically adapted into newsletter-style paragraphs: report headings and page artefacts are removed, useful facts are retained, common formal phrasing is simplified, and copy is grouped into readable newsletter-length paragraphs. The checkbox in the FULL AUTO panel controls this behavior.
