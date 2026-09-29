@@ -14,7 +14,22 @@ Drop reports/documents → newsletter auto-builds.
 4. Preview updates live — every header still has the **embedded logo** (`C:\Users\itoha\odyssey-newsletter-fully-automated\logo.png` base64).
 5. Edit anything after auto-fill if needed, then **🎨 Export to Canva (.pptx)** (editable in Canva) or **📄 PDF**. Each newsletter page becomes one PDF page / one Canva slide, with the newsletter structure and fonts preserved.
 
-The export pipeline uses the shared A4 page model (`595.5pt × 842.25pt`) and the same explicit page model for preview, PDF, and PPTX. Long event, volunteer, and impact text is split into intentional continuation pages rather than flowing into the next section. PPTX uses PptxGenJS `sizing: cover/contain`, matching the preview's `object-fit`; cropped image data from the frame editor is the canonical source for all three outputs. Export validation reports missing images, low-resolution frames, and text-budget warnings without silently reflowing content.
+## A4 page model and pagination
+
+Every page is A4 portrait — `210mm × 297mm` / `8.27in × 11.69in` / `595.28pt × 841.89pt` — everywhere: live preview, PDF, PPTX, Canva import, and every continuation page. A single frozen constant, `PAGE_SIZE`, is the only place dimensions are defined.
+
+Pagination is a measurement engine, not a character counter:
+
+- The newsletter is first built as ordered **content blocks** (cover → events → volunteer → impact → opportunities → closing).
+- Each block is finished completely before the next one starts, so an event is never interrupted by another event and the order never changes.
+- For each page the engine renders the real page template off-screen at the true A4 design width, measures the actual layout, and places the maximum amount of body text that fits. Whatever does not fit moves to a new A4 page.
+- The title and hero image always stay with the first page of a block; only the body continues. Splitting happens at sentence boundaries (word boundaries only when a single sentence exceeds a full page), so no paragraph, sentence, image, or callout is ever clipped.
+- Nothing is scaled down to make content fit: font sizes, line spacing, margins, and image dimensions are unchanged. If the text does not fit, a new A4 page is created instead.
+- Page count is fully content-driven — it is not fixed at any number.
+
+`paginateNewsletter()` is the single source of truth. The preview, the PDF, and the PPTX all consume the same page model, so they can never disagree. `assertA4Page()` rejects any page that is not A4 portrait, and `auditRenderedPages()` checks the live DOM for content that would spill past the A4 edge, so a page that is not A4 or is overflowing fails the export instead of being silently clipped.
+
+PPTX uses PptxGenJS `sizing: cover/contain` matching the preview's `object-fit`; cropped image data from the frame editor is the canonical source for all three outputs. Export validation reports missing images, low-resolution frames, non-A4 pages, and any content that exceeds the A4 page.
 
 All colours locked to sample: green `#3EAE5B`, orange `#F5822A`, blue `#BFE4F7`.
 

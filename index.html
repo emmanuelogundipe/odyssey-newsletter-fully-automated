@@ -75,7 +75,11 @@ input[type=file]{width:100%;font-size:11.5px}
 
 /* Preview */
 .preview-label{font-size:11px;font-weight:800;color:#3a4a44;letter-spacing:.6px;margin:6px 0 10px;text-align:center;text-transform:uppercase}
-.page{width:540px;max-width:100%;min-height:764px;margin:0 auto 22px;background:var(--blue);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.13);overflow:hidden;position:relative}
+.page{width:595.28pt;height:841.89pt;min-height:841.89pt;max-height:841.89pt;background:var(--blue);border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.13);overflow:visible;position:relative}
+.page-shell{position:relative;width:540px;height:764px;margin:0 auto 22px;overflow:visible}
+.page-shell > .page{position:absolute;top:0;left:0;transform:scale(var(--preview-scale,0.680273));transform-origin:top left}
+.page-design{width:540px;min-height:764px;transform:scale(var(--design-scale,1.469827));transform-origin:top left;position:relative}
+#preview.exporting .page-shell > .page{position:relative;transform:none;box-shadow:none}
 .page .bar{padding:10px 14px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:800}
 .page .bar.green{background:var(--green)} .page .bar.orange{background:var(--orange)} .page .bar.sky{background:#4FA6D8}
 .page .bar b{font-family:Montserrat,sans-serif;font-size:13px}
@@ -104,14 +108,17 @@ input[type=file]{width:100%;font-size:11.5px}
 .footer-thanks{color:#fff;text-align:center;padding:10px 12px}
 .footer-contact{display:flex;justify-content:space-between;gap:8px;background:var(--orange);color:#fff;padding:8px 10px;font-size:10px;font-weight:700}
 .print-hide{display:block}
-@page{size:595.5pt 842.25pt;margin:0}
+@page{size:595.28pt 841.89pt;margin:0}
 @media print{
   body *{visibility:hidden}
   .right, .right *{visibility:visible}
   .right{position:absolute;left:0;top:0;width:100%;height:auto;overflow:visible;background:#fff}
-  .left, header.top, .print-hide{display:none !important}
-  .page{width:595.5pt;height:842.25pt;min-height:842.25pt;max-height:842.25pt;box-shadow:none;overflow:hidden;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always;margin:0 auto 0}
-  .page:last-child{break-after:auto;page-break-after:auto}
+  .left, header.top, .print-hide, .preview-label, #helpBox{display:none !important}
+  .page{width:595.28pt;height:841.89pt;min-height:841.89pt;max-height:841.89pt;box-shadow:none;overflow:visible;break-inside:avoid;page-break-inside:avoid;margin:0 auto 0}
+  .page-shell{width:595.28pt;height:841.89pt;margin:0;break-inside:avoid;page-break-inside:avoid;break-after:page;page-break-after:always}
+  .page-shell:last-child{break-after:auto;page-break-after:auto}
+  .page-shell > .page{position:relative;transform:none;break-after:auto;page-break-after:auto}
+  .page-design{transform:scale(var(--design-scale,1.469827))}
 }
 
 .help{font-size:11px;background:#fff8ed;border:1px solid #ffdfb5;border-radius:8px;padding:10px;margin-top:8px;color:#5a3d0a}
@@ -942,96 +949,250 @@ function applyColors(){
 }
 
 // ---------- Shared page model ----------
-// The reference template is A4 portrait: 595.5pt x 842.25pt.
+// The reference template is A4 portrait: 595.28pt x 841.89pt.
 const PAGE_SIZE = Object.freeze({
-  widthPt: 595.5,
-  heightPt: 842.25,
-  widthIn: 595.5 / 72,
-  heightIn: 842.25 / 72,
+  widthPt: 595.28,
+  heightPt: 841.89,
+  widthIn: 595.28 / 72,
+  heightIn: 841.89 / 72,
   widthMm: 210,
   heightMm: 297
 });
 const PT_PER_INCH = 72;
 const MM_TO_PT = 72 / 25.4;
+// Design-space constants (the template's own coordinate system). 540 x 764 has
+// the same 1:1.4142 ratio as A4 portrait, so design space maps to A4 evenly.
 const PREVIEW_WIDTH_PX = 540;
 const PREVIEW_HEIGHT_PX = 764;
 const PREVIEW_PX_TO_PT = PAGE_SIZE.widthPt / PREVIEW_WIDTH_PX;
-const PAGE_BUDGET = Object.freeze({event:950, volunteer:700, impact:950});
 
-function splitNewsletterText(text, maxChars){
-  const clean=cleanReportText(text || '', '');
+// ---------- Pagination engine ----------
+// The paginator is a measurement engine, not a character counter. It renders the
+// real page template off-screen at true A4 design width and measures how much
+// vertical space the body actually occupies, then places the maximum amount of
+// content that fits inside the A4 content area. Whatever does not fit moves to
+// a new A4 page; nothing is scaled down, clipped, or dropped.
+
+// Character budgets are only used as a non-DOM safety net (for example unit
+// tests) and as the last-resort word-splitting floor.
+const PAGE_BUDGET = Object.freeze({event:900, volunteer:660, impact:900});
+
+const PAGE_GEOMETRY = Object.freeze({
+  designWidth: 540,       // legacy design coordinate width used by the template CSS
+  designHeight: 764,      // 540 x 764 is the same 1:1.4142 ratio as A4 portrait
+  usableBottom: 22        // breathing room kept below the card, in design px
+});
+
+let _measureHost = null;
+
+function getMeasureHost(){
+  if(typeof document === 'undefined' || !document.body) return null;
+  if(_measureHost && _measureHost.isConnected) return _measureHost;
+  const host = document.createElement('div');
+  host.id = 'odyssey-measure-host';
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:absolute',
+    'left:-20000px',
+    'top:0',
+    'width:' + PAGE_GEOMETRY.designWidth + 'px',
+    'visibility:hidden',
+    'pointer-events:none',
+    'z-index:-1'
+  ].join(';');
+  document.body.appendChild(host);
+  _measureHost = host;
+  return host;
+}
+
+// Wraps template markup in the real .page / .page-design structure and returns
+// the design element so callers can measure genuine layout.
+//
+// The clone neutralises the fixed page canvas (width/height/min-height/max-height
+// and the preview transform) so measurement reports the true intrinsic content
+// height of the template rather than the page box.
+function buildMeasureRoot(innerHtml){
+  const host = getMeasureHost();
+  if(!host) return null;
+  const page = document.createElement('div');
+  page.className = 'page';
+  page.style.cssText = [
+    'position:static',
+    'width:' + PAGE_GEOMETRY.designWidth + 'px',
+    'height:auto',
+    'min-height:0',
+    'max-height:none',
+    'overflow:visible',
+    'box-shadow:none',
+    'transform:none',
+    'border-radius:0'
+  ].join(';');
+  const design = document.createElement('div');
+  design.className = 'page-design';
+  design.style.cssText = [
+    'transform:none',
+    'width:' + PAGE_GEOMETRY.designWidth + 'px',
+    'min-height:0',
+    'height:auto'
+  ].join(';');
+  design.innerHTML = innerHtml;
+  page.appendChild(design);
+  host.innerHTML = '';
+  host.appendChild(page);
+  return design;
+}
+
+// True content height of a .page-design element: the bottom of its last child.
+// scrollHeight is unreliable here because children can use negative margins
+// (the cover card overlaps the banner) and because min-height clamps the box.
+function designContentHeight(design){
+  if(!design) return 0;
+  let bottom = 0;
+  Array.from(design.children).forEach(child => {
+    const b = child.offsetTop + child.offsetHeight;
+    if(b > bottom) bottom = b;
+  });
+  return bottom;
+}
+
+// Returns the used height (design px) of a template's content, or null when the
+// DOM is unavailable.
+function measureTemplateHeight(innerHtml){
+  const design = buildMeasureRoot(innerHtml);
+  if(!design) return null;
+  const height = designContentHeight(design) || design.scrollHeight || 0;
+  getMeasureHost().innerHTML = '';
+  return height;
+}
+
+// Breaks a body into the smallest units the paginator is allowed to split on:
+// whole sentences where possible, otherwise words. Paragraphs are never broken
+// mid-sentence unless a single sentence exceeds a full page.
+function tokenizeBodyUnits(text){
+  const clean = cleanReportText(text || '', '');
+  if(!clean) return [];
+  const units = [];
+  clean.split(/\n{2,}/).forEach(paragraph => {
+    const sentences = splitNewsletterSentences(paragraph);
+    if(sentences.length <= 1) units.push(paragraph);
+    else sentences.forEach(sentence => units.push(sentence));
+  });
+  return units.filter(unit => unit && unit.trim());
+}
+
+function splitNewsletterTextByChars(text, maxChars){
+  const clean = cleanReportText(text || '', '');
   if(!clean) return [''];
   if(clean.length <= maxChars) return [clean];
-  const paragraphs=clean.split(/\n{2,}/).map(part=>part.trim()).filter(Boolean);
-  const chunks=[];
-  let current='';
-  const push=()=>{ if(current.trim()){ chunks.push(current.trim()); current=''; } };
-  paragraphs.forEach(paragraph=>{
+  const paragraphs = clean.split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
+  const chunks = [];
+  let current = '';
+  const push = () => { if(current.trim()){ chunks.push(current.trim()); current = ''; } };
+  paragraphs.forEach(paragraph => {
     if(paragraph.length > maxChars){
       push();
-      const sentences=splitNewsletterSentences(paragraph);
-      sentences.forEach(sentence=>{
+      const sentences = splitNewsletterSentences(paragraph);
+      sentences.forEach(sentence => {
         if((current + ' ' + sentence).trim().length > maxChars && current.trim()) push();
         if(sentence.length > maxChars){
-          const words=sentence.split(/\s+/);
-          let part='';
-          words.forEach(word=>{
-            if((part+' '+word).trim().length > maxChars && part){ chunks.push(part.trim()); part=word; }
+          const words = sentence.split(/\s+/);
+          let part = '';
+          words.forEach(word => {
+            if((part + ' ' + word).trim().length > maxChars && part){ chunks.push(part.trim()); part = word; }
             else part += (part ? ' ' : '') + word;
           });
-          if(part.trim()) current=part.trim();
-        }else current += (current ? ' ' : '') + sentence;
+          if(part.trim()) current = part.trim();
+        } else current += (current ? ' ' : '') + sentence;
       });
-    }else if((current + '\n\n' + paragraph).trim().length > maxChars && current.trim()){
-      push(); current=paragraph;
-    }else current += (current ? '\n\n' : '') + paragraph;
+    } else if((current + '\n\n' + paragraph).trim().length > maxChars && current.trim()){
+      push(); current = paragraph;
+    } else current += (current ? '\n\n' : '') + paragraph;
   });
   push();
-  return chunks.length ? chunks : [clean.slice(0,maxChars)];
+  return chunks.length ? chunks : [clean.slice(0, maxChars)];
 }
 
-function buildNewsletterPageModel(){
-  const pages=[{kind:'cover', pageIndex:0}];
-  S.events.forEach((event,eventIndex)=>{
-    const chunks=splitNewsletterText(event.body, PAGE_BUDGET.event);
-    chunks.forEach((body,partIndex)=>pages.push({
-      kind:'event', eventIndex, partIndex, continued:partIndex>0,
-      title:event.title, body, event
-    }));
-  });
-  const volunteerParts=splitNewsletterText(S.volunteer.bio, PAGE_BUDGET.volunteer);
-  volunteerParts.forEach((bio,partIndex)=>pages.push({
-    kind:'volunteer', partIndex, continued:partIndex>0, bio,
-    note:partIndex===volunteerParts.length-1 ? S.volunteer.note : '',
-    showPhoto:partIndex===0
+// ---------- Content blocks ----------
+// A content block is one logical unit of the newsletter. The engine finishes a
+// block completely before the next block starts.
+
+function eventContentBlocks(){
+  return S.events.map((event, eventIndex) => ({
+    type: 'event',
+    eventIndex,
+    title: event.title,
+    subtitle: event.sub || '',
+    image: event.img1 || '',
+    body: event.body || '',
+    event
   }));
-  const impactParts=splitNewsletterText(S.impact.story, PAGE_BUDGET.impact);
-  impactParts.forEach((story,partIndex)=>pages.push({
-    kind:'impact', partIndex, continued:partIndex>0, story,
-    showPhoto:partIndex===0
-  }));
-  if(S.opportunities.length) pages.push({kind:'opportunities'});
-  pages.push({kind:'closing'});
-  return pages.map((page,pageIndex)=>({...page,pageIndex}));
 }
 
-// ---------- Preview ----------
-function renderPreview(){
-  const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
-  const newsletterPages = buildNewsletterPageModel();
-  let out = "";
+function volunteerContentBlocks(){
+  return [{
+    type: 'volunteer',
+    title: S.volunteer.name,
+    subtitle: 'Volunteer/Intern Spotlight',
+    image: S.volunteer.photo || '',
+    body: S.volunteer.bio || '',
+    note: S.volunteer.note || ''
+  }];
+}
 
-  // COVER
-  out += `
-  <div class="page" id="page-cover" data-page-kind="cover">
-    ${S.cover.banner?`<img class="cover-banner" src="${S.cover.banner}">`:`<div class="cover-banner" style="background:linear-gradient(135deg, ${S.colors.green}, #2a7a3d);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">Upload a banner image on the left</div>`}
+function impactContentBlocks(){
+  return [{
+    type: 'impact',
+    title: S.impact.name,
+    subtitle: 'Impact Story',
+    image: S.impact.photo || '',
+    body: S.impact.story || ''
+  }];
+}
+
+function buildNewsletterContent(){
+  const blocks = [
+    { type: 'cover' },
+    ...eventContentBlocks(),
+    ...volunteerContentBlocks(),
+    ...impactContentBlocks()
+  ];
+  if(S.opportunities.length) blocks.push({ type: 'opportunities', items: S.opportunities });
+  blocks.push({ type: 'closing' });
+  return blocks;
+}
+
+// ---------- Page templates ----------
+// Each template returns the inner markup of a .page-design for one page of a
+// content block. `bodyText` is the slice assigned to that page. The same
+// templates are used for measurement, preview, and page-model generation so
+// pagination and rendering can never disagree.
+
+// Logos, icons, and graphics are marked with object-fit:contain so the whole
+// artwork is always visible and its aspect ratio is never changed.
+const FIT_CONTAIN = 'object-fit:contain';
+const FIT_COVER = 'object-fit:cover';
+
+// The cover is a fixed composition: banner image, overlapping card, caption.
+// Only the banner is flexible, and because it uses object-fit:cover, reducing
+// it crops the image rather than distorting it. Every other element keeps its
+// designed size.
+const COVER_BANNER = Object.freeze({design: 152, min: 88, step: 4});
+
+function pageBar(text, tone, monthYear){
+  return `<div class="bar ${tone}"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${text}</span></div>`;
+}
+
+function coverPageTemplate(monthYear, bannerHeight){
+  const height = bannerHeight || COVER_BANNER.design;
+  return `
+    ${S.cover.banner?`<img class="cover-banner" src="${S.cover.banner}" style="height:${height}px">`:`<div class="cover-banner" style="height:${height}px;background:linear-gradient(135deg, ${S.colors.green}, #2a7a3d);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800">Upload a banner image on the left</div>`}
     <div class="cover-card">
       ${S.closing.logo?`<div style="text-align:center;margin-bottom:6px"><img src="${S.closing.logo}" style="width:64px;height:64px;border-radius:50%;background:#fff;padding:3px;border:2px solid ${S.colors.green};object-fit:contain" alt="Odyssey logo"></div>`:``}
       <div class="cover-meta">${S.cover.sub}</div>
       <div class="cover-badge">${S.monthLabel}</div>
       <h2>${S.cover.headline}</h2>
       ${S.cover.feature?`<img class="cover-feature" src="${S.cover.feature}">`:`<div class="cover-feature" style="background:#e6eef2;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:11px;border-style:dashed">Upload feature image</div>`}
-      ${S.cover.graphic?`<div style="text-align:right;margin-top:6px"><img src="${S.cover.graphic}" style="max-height:38px"></div>`:``}
+      ${S.cover.graphic?`<div style="text-align:right;margin-top:6px"><img src="${S.cover.graphic}" style="max-height:38px;${FIT_CONTAIN}"></div>`:``}
       <p style="font-size:11.5px;line-height:1.5;margin:10px 0 0;color:#24352e">${esc(S.cover.intro)}</p>
       <div class="updates-pill">Recent Updates:</div>
       <div class="tiles">
@@ -1044,81 +1205,26 @@ function renderPreview(){
         `).join('')}
       </div>
     </div>
-    <div style="text-align:center;padding:8px 0 10px;font-size:10px;color:#2a3a32;font-weight:700">${monthYear} — Odyssey Educational Foundation</div>
-  </div>`;
+    <div style="text-align:center;padding:8px 0 10px;font-size:10px;color:#2a3a32;font-weight:700">${monthYear} — Odyssey Educational Foundation</div>`;
+}
 
-  // EVENTS — one explicit page per event segment
-  newsletterPages.filter(page=>page.kind==='event').forEach(page=>{
-    const e=page.event;
-    const hasImages=!page.continued;
-    out += `
-    <div class="page" data-page-kind="event" data-continued="${page.continued}">
-      <div class="bar sky"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Events · continued':'Events'}</span></div>
-      <div class="content"><div class="card">
-        ${hasImages && e.icon?`<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px"></div>`:``}
-        ${hasImages && (e.img1?`<img class="event-img" src="${e.img1}">`:`<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`)}
-        <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${page.continued?`${page.title} (continued)`:page.title}</h3>
-        <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(page.body)}</p>
-        <div class="clear"></div>
-        ${hasImages && e.img2?`<img class="event-img-wide" src="${e.img2}">`:``}
-        ${hasImages && e.graphic?`<div style="text-align:right;margin-top:8px"><img src="${e.graphic}" style="max-height:38px"></div>`:``}
-      </div></div>
-    </div>`;
-  });
+function opportunitiesPageTemplate(monthYear, startIndex, items){
+  const list = items || S.opportunities;
+  return `
+    ${pageBar('Opportunities', 'orange', monthYear)}
+    <div class="content"><div class="card opp">
+      ${list.map((o,i)=>`
+        <div><div class="opp-item">${(startIndex||0)+i+1}. ${o.title}</div><div class="opp-link"><a href="${o.link}" target="_blank">${o.link}</a></div></div>
+      `).join('')}
+    </div></div>`;
+}
 
-  // VOLUNTEER — explicit profile + continuation pages
-  newsletterPages.filter(page=>page.kind==='volunteer').forEach(page=>{
-    out += `
-    <div class="page" data-page-kind="volunteer" data-continued="${page.continued}">
-      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Volunteer/Intern Spotlight · continued':'Volunteer/Intern Spotlight'}</span></div>
-      <div class="content"><div class="card">
-        <div class="spot">
-          ${page.showPhoto && S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
-          <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}${page.continued?' · continued':''}</h3>
-        </div>
-        ${page.showPhoto && S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px"></div>`:``}
-        <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(page.bio)}</p>
-        ${page.note?`<div style="margin-top:10px;background:#fff;border:1px solid #e0e7e4;border-radius:10px;padding:10px;font-size:11.5px;line-height:1.5"><b>${esc(page.note)}</b></div>`:``}
-      </div></div>
-    </div>`;
-  });
-
-  // IMPACT — explicit story + continuation pages
-  newsletterPages.filter(page=>page.kind==='impact').forEach(page=>{
-    out += `
-    <div class="page" data-page-kind="impact" data-continued="${page.continued}">
-      <div class="bar green"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>${page.continued?'Impact Story · continued':'Impact Story'}</span></div>
-      <div class="content"><div class="card">
-        <div class="spot">
-          ${page.showPhoto && S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
-          <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}${page.continued?' · continued':''}</h3>
-        </div>
-        <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(page.story)}</p>
-        ${page.showPhoto && S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px"></div>`:``}
-      </div></div>
-    </div>`;
-  });
-
-  // OPPORTUNITIES
-  if(S.opportunities.length){
-    out += `
-    <div class="page">
-      <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span>Opportunities</span></div>
-      <div class="content"><div class="card opp">
-        ${S.opportunities.map((o,i)=>`
-          <div><div class="opp-item">${i+1}. ${o.title}</div><div class="opp-link"><a href="${o.link}" target="_blank">${o.link}</a></div></div>
-        `).join('')}
-      </div></div>
-    </div>`;
-  }
-
-  // CLOSING
-  out += `
-  <div class="page">
-    <div class="bar orange"><span style="display:flex;align-items:center;gap:8px">${S.closing.logo?`<img src="${S.closing.logo}" style="width:26px;height:26px;border-radius:50%;background:#fff;padding:2px;object-fit:contain">`:``}<b>${monthYear}</b></span><span></span></div>
+function closingPageTemplate(monthYear){
+  return `
+    ${pageBar('', 'orange', monthYear)}
     <div class="content">
       <div class="card" style="text-align:center">
-        ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-bottom:6px">`:``}
+        ${S.closing.logo?`<img src="${S.closing.logo}" style="max-height:44px;margin-bottom:6px;${FIT_CONTAIN}">`:``}
         <p style="font-size:11px;line-height:1.6;margin:0">${esc(S.closing.about)}</p>
         <h3 style="font-family:Montserrat,sans-serif;margin:14px 0 4px">Our Mission</h3>
         <p style="font-size:11px;line-height:1.5;margin:0">${esc(S.closing.mission)}</p>
@@ -1130,14 +1236,373 @@ function renderPreview(){
       </div>
       <div class="footer-thanks" style="font-family:Montserrat,sans-serif;font-weight:800;font-size:16px">Thank you for reading!</div>
     </div>
-    <div class="footer-contact"><span>🌐 ${S.closing.website}</span><span>✉ ${S.closing.email}</span><span>📞 ${S.closing.phone}</span></div>
+    <div class="footer-contact"><span>🌐 ${S.closing.website}</span><span>✉ ${S.closing.email}</span><span>📞 ${S.closing.phone}</span></div>`;
+}
+
+function eventPageTemplate(page, bodyText, monthYear){
+  const e = page.event;
+  const hasImages = !page.continued;
+  const title = page.continued ? `${page.title} (continued)` : page.title;
+  return `
+    ${pageBar(page.continued ? 'Events · continued' : 'Events', 'sky', monthYear)}
+    <div class="content"><div class="card">
+      ${hasImages && e.icon ? `<div style="text-align:right;margin:-2px 0 6px"><img src="${e.icon}" style="max-height:36px;${FIT_CONTAIN}"></div>` : ``}
+      ${hasImages ? (e.img1 ? `<img class="event-img" src="${e.img1}">` : `<div class="event-img" style="background:#dde8e3;display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px;float:left;margin:0 10px 6px 0">no image</div>`) : ``}
+      <h3 style="margin:0 0 6px;font-size:14px;font-family:Montserrat,sans-serif">${title}</h3>
+      <p style="font-size:11.5px;line-height:1.55;margin:0">${esc(bodyText)}</p>
+      <div class="clear"></div>
+      ${hasImages && e.img2 ? `<img class="event-img-wide" src="${e.img2}">` : ``}
+      ${hasImages && e.graphic ? `<div style="text-align:right;margin-top:8px"><img src="${e.graphic}" style="max-height:38px;${FIT_CONTAIN}"></div>` : ``}
+    </div></div>`;
+}
+
+function volunteerPageTemplate(page, bodyText, monthYear){
+  return `
+    ${pageBar(page.continued ? 'Volunteer/Intern Spotlight · continued' : 'Volunteer/Intern Spotlight', 'orange', monthYear)}
+    <div class="content"><div class="card">
+      <div class="spot">
+        ${page.showPhoto && S.volunteer.photo?`<img src="${S.volunteer.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.volunteer.name}${page.continued?' · continued':''}</h3>
+      </div>
+      ${page.showPhoto && S.volunteer.icon?`<div style="text-align:right;margin-top:6px"><img src="${S.volunteer.icon}" style="max-height:36px;${FIT_CONTAIN}"></div>`:``}
+      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(bodyText)}</p>
+      ${page.note?`<div style="margin-top:10px;background:#fff;border:1px solid #e0e7e4;border-radius:10px;padding:10px;font-size:11.5px;line-height:1.5"><b>${esc(page.note)}</b></div>`:``}
+    </div></div>`;
+}
+
+function impactPageTemplate(page, bodyText, monthYear){
+  return `
+    ${pageBar(page.continued ? 'Impact Story · continued' : 'Impact Story', 'green', monthYear)}
+    <div class="content"><div class="card">
+      <div class="spot">
+        ${page.showPhoto && S.impact.photo?`<img src="${S.impact.photo}" style="width:78px;height:78px;border-radius:50%;object-fit:cover;border:3px solid var(--orange)">`:`<div style="width:78px;height:78px;border-radius:50%;background:#dde8e3;border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;color:#6b8079;font-size:10px">${page.continued?'':'photo'}</div>`}
+        <h3 style="margin:4px 0 0;font-size:16px;font-family:Montserrat,sans-serif;text-transform:uppercase;flex:1">${S.impact.name}${page.continued?' · continued':''}</h3>
+      </div>
+      <p style="font-size:11.5px;line-height:1.6;margin:10px 0 0">${esc(bodyText)}</p>
+      ${page.showPhoto && S.impact.graphic?`<div style="text-align:right;margin-top:8px"><img src="${S.impact.graphic}" style="max-height:44px;${FIT_CONTAIN}"></div>`:``}
+    </div></div>`;
+}
+
+const PAGE_TEMPLATES = {
+  event: eventPageTemplate,
+  volunteer: volunteerPageTemplate,
+  impact: impactPageTemplate
+};
+
+// Distributes one content block across A4 pages. A block is finished before the
+// next block begins; the title/hero header always stays with the first page of
+// the block, and only the body continues.
+function paginateContentBlock(block, monthYear){
+  if(block.type === 'cover'){
+    // The cover is one fixed composition. If a long intro or extra update tile
+    // pushes it past the A4 box, only the flexible banner shrinks (it crops via
+    // object-fit:cover) so the layout and typography stay exactly as designed.
+    let height = COVER_BANNER.design;
+    let used = measureTemplateHeight(coverPageTemplate(monthYear, height));
+    while(used !== null && used > PAGE_GEOMETRY.designHeight && height > COVER_BANNER.min){
+      height = Math.max(COVER_BANNER.min, height - COVER_BANNER.step);
+      used = measureTemplateHeight(coverPageTemplate(monthYear, height));
+    }
+    return [{ kind: 'cover', block, bannerHeight: height, usedHeight: used }];
+  }
+  if(block.type === 'closing'){
+    return [{ kind: 'closing', block, usedHeight: measureTemplateHeight(closingPageTemplate(monthYear)) }];
+  }
+  if(block.type === 'opportunities'){
+    // Opportunities keep each item with its link and never split a single item.
+    const limit = PAGE_GEOMETRY.designHeight - PAGE_GEOMETRY.usableBottom;
+    const pages = [];
+    let index = 0;
+    let guard = 0;
+    while(index < block.items.length && guard++ < 200){
+      let slice = null;
+      let take = 1;
+      while(index + take <= block.items.length){
+        const candidate = block.items.slice(index, index + take);
+        const h = measureTemplateHeight(opportunitiesPageTemplate(monthYear, index, candidate));
+        if(h === null){ slice = candidate; break; }
+        if(h > limit) break;
+        slice = candidate;
+        take++;
+      }
+      const chosen = (slice && slice.length) ? slice : [block.items[index]];
+      pages.push({
+        kind: 'opportunities', block, partIndex: pages.length,
+        continued: pages.length > 0, items: chosen, startIndex: index
+      });
+      index += chosen.length;
+    }
+    return pages;
+  }
+  const template = PAGE_TEMPLATES[block.type];
+  if(!template) return [];
+
+  // The first page carries the header, title, and hero image, so it has less
+  // body room than a continuation page. Both capacities are measured from the
+  // actual template rather than assumed.
+  const firstProbe = { event: block.event, continued: false, showPhoto: true, note: '' };
+  const contProbe  = { event: block.event, continued: true,  showPhoto: false, note: '' };
+
+  const chromeHeight = (probe, bodyText) => {
+    const html = template(probe, bodyText || ' ', monthYear);
+    return measureTemplateHeight(html);
+  };
+
+  // A body height of 0 means the template itself already fills the page.
+  // Measure chrome by rendering the template with an empty body.
+  const firstChrome = chromeHeight(firstProbe, '');
+  const contChrome  = chromeHeight(contProbe, '');
+  if(firstChrome === null || contChrome === null){
+    // No DOM: fall back to conservative character budgets.
+    const budget = block.type === 'volunteer' ? PAGE_BUDGET.volunteer : (block.type === 'impact' ? PAGE_BUDGET.impact : PAGE_BUDGET.event);
+    return splitNewsletterTextByChars(block.body, budget).map((body, i) => ({
+      kind: block.type, block, event: block.event, eventIndex: block.eventIndex,
+      title: block.title, body, partIndex: i, continued: i > 0, showPhoto: i === 0
+    }));
+  }
+
+  const firstCapacity = Math.max(80, PAGE_GEOMETRY.designHeight - firstChrome - PAGE_GEOMETRY.usableBottom);
+  const contCapacity  = Math.max(80, PAGE_GEOMETRY.designHeight - contChrome  - PAGE_GEOMETRY.usableBottom);
+
+  const makePage = partIndex => ({
+    kind: block.type,
+    block,
+    event: block.event,
+    eventIndex: block.eventIndex,
+    title: block.title,
+    subtitle: block.subtitle,
+    body: '',
+    bio: '',
+    story: '',
+    partIndex,
+    continued: partIndex > 0,
+    showPhoto: partIndex === 0,
+    note: ''
+  });
+
+  // Single forward pass. Each candidate page is measured with the real
+  // template, filled to capacity, and the remainder continues on the next A4
+  // page. Nothing is re-measured from scratch, so the pass stays linear.
+  const clean = cleanReportText(block.body || '', '');
+  const units = tokenizeBodyUnits(clean);
+  const pages = [];
+
+  let partIndex = 0;
+  let buffer = '';
+  let cursor = 0;
+  let budget = firstCapacity;
+  const page = makePage(0);
+
+  const fits = candidate => {
+    const h = measureTemplateHeight(template(page, candidate, monthYear));
+    return h === null ? candidate.length <= PAGE_BUDGET.event : h <= PAGE_GEOMETRY.designHeight - PAGE_GEOMETRY.usableBottom;
+  };
+
+  const commit = () => {
+    const filled = makePage(partIndex);
+    if(block.type === 'event') filled.body = buffer;
+    else if(block.type === 'volunteer') filled.bio = buffer;
+    else filled.story = buffer;
+    pages.push(filled);
+    partIndex++;
+    buffer = '';
+    budget = contCapacity;
+  };
+
+  while(cursor < units.length){
+    const candidate = buffer ? buffer + ' ' + units[cursor] : units[cursor];
+    if(fits(candidate)){ buffer = candidate; cursor++; continue; }
+    if(buffer){
+      commit();
+      Object.assign(page, makePage(partIndex));
+      continue; // retry this unit on the fresh page
+    }
+    // A single unit is taller than the page: split it at word boundaries.
+    const words = units[cursor].split(/\s+/).filter(Boolean);
+    if(words.length > 1){
+      units.splice(cursor, 1, ...words);
+      continue;
+    }
+    // One unbreakable token: place it alone so nothing is ever lost.
+    buffer = units[cursor];
+    cursor++;
+    commit();
+    Object.assign(page, makePage(partIndex));
+  }
+  if(buffer) commit();
+  if(!pages.length) pages.push(makePage(0));
+
+  // The volunteer note is a callout: keep it with the final bio page when it fits.
+  if(block.type === 'volunteer' && block.note && pages.length){
+    const last = pages[pages.length - 1];
+    const probeHtml = volunteerPageTemplate({ ...last, note: block.note }, last.bio, monthYear);
+    const h = measureTemplateHeight(probeHtml);
+    if(h !== null && h <= PAGE_GEOMETRY.designHeight - PAGE_GEOMETRY.usableBottom) last.note = block.note;
+    else pages.push({ ...makePage(pages.length), note: block.note });
+  }
+
+  return pages;
+}
+
+function buildNewsletterPageModel(){
+  const monthYear = `${S.monthLabel.replace(/ Edition/i, '')}, ${S.year}`;
+  const blocks = buildNewsletterContent();
+  const pages = [];
+  blocks.forEach(block => {
+    // FINISH ONE CONTENT UNIT BEFORE STARTING THE NEXT.
+    const blockPages = paginateContentBlock(block, monthYear);
+    blockPages.forEach(page => pages.push(page));
+  });
+  return pages.map((page, pageIndex) => ({ ...page, pageIndex }));
+}
+
+// The single pagination source of truth. Preview, PDF, and PPTX all consume
+// the page model returned here, so all three always agree.
+function paginateNewsletter(content, pageConfig){
+  const config = pageConfig || PAGE_SIZE;
+  const pages = buildNewsletterPageModel();
+  return pages.map(page => {
+    const model = {
+      ...page,
+      pageNumber: (page.pageIndex ?? 0) + 1,
+      width: config.widthMm,
+      height: config.heightMm,
+      unit: 'mm',
+      orientation: 'portrait',
+      widthPt: config.widthPt,
+      heightPt: config.heightPt,
+      widthIn: config.widthIn,
+      heightIn: config.heightIn
+    };
+    assertA4Page(model);
+    return model;
+  });
+}
+
+// True content height of a rendered page. The .page-design box has
+// min-height:764px, so scrollHeight is clamped; the real bottom of the last
+// child is what actually determines whether content spills past the A4 edge.
+function pageContentHeight(pageEl){
+  return designContentHeight(pageEl.querySelector('.page-design'));
+}
+
+// Audits the live preview for real A4 overflow. Anything taller than the A4
+// content box is reported so it can be paginated rather than clipped.
+function auditRenderedPages(){
+  const results = [];
+  Array.from(document.querySelectorAll('#preview .page')).forEach((el, index) => {
+    // offsetWidth/Height are layout sizes and are unaffected by the on-screen
+    // preview transform, so this measures the real A4 page box.
+    const widthPt = el.offsetWidth * 72 / 96;
+    const heightPt = el.offsetHeight * 72 / 96;
+    const used = pageContentHeight(el);
+    results.push({
+      pageNumber: index + 1,
+      kind: el.dataset.pageKind || 'unknown',
+      continued: el.dataset.continued === 'true',
+      widthPt: Math.round(widthPt * 100) / 100,
+      heightPt: Math.round(heightPt * 100) / 100,
+      isA4: Math.abs(widthPt - PAGE_SIZE.widthPt) < 1 && Math.abs(heightPt - PAGE_SIZE.heightPt) < 1,
+      contentHeightPx: Math.round(used * 10) / 10,
+      contentBoxPx: PAGE_GEOMETRY.designHeight,
+      overflowPx: Math.round((used - PAGE_GEOMETRY.designHeight) * 10) / 10,
+      clipped: used > PAGE_GEOMETRY.designHeight + 1
+    });
+  });
+  return results;
+}
+
+// Page-model validation. A page that is not A4 portrait is a hard failure.
+function assertA4Page(page){
+  const problems = [];
+  if(page.width !== 210) problems.push(`width ${page.width}mm (expected 210)`);
+  if(page.height !== 297) problems.push(`height ${page.height}mm (expected 297)`);
+  if(page.unit !== 'mm') problems.push(`unit ${page.unit} (expected mm)`);
+  if(page.orientation !== 'portrait') problems.push(`orientation ${page.orientation} (expected portrait)`);
+  if(Math.abs(page.widthPt - 595.28) > 0.01) problems.push(`widthPt ${page.widthPt} (expected 595.28)`);
+  if(Math.abs(page.heightPt - 841.89) > 0.01) problems.push(`heightPt ${page.heightPt} (expected 841.89)`);
+  if(problems.length) throw new Error('Invalid newsletter page model: ' + problems.join('; '));
+  return true;
+}
+
+// ---------- Preview ----------
+function renderPreview(){
+  const monthYear = `${S.monthLabel.replace(/ Edition/i,'')}, ${S.year}`;
+  const newsletterPages = paginateNewsletter(S, PAGE_SIZE);
+  let out = "";
+
+  // COVER — banner height comes from the pagination model so preview and the
+  // measured fit can never disagree.
+  const coverPage = newsletterPages.find(page => page.kind === 'cover') || {};
+  out += `
+  <div class="page" id="page-cover" data-page-kind="cover">
+    ${coverPageTemplate(monthYear, coverPage.bannerHeight)}
+  </div>`;
+
+  // EVENTS / VOLUNTEER / IMPACT — rendered from the same page templates the
+  // pagination engine measured, so preview and pagination cannot disagree.
+  newsletterPages.filter(page=>page.kind==='event').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="event" data-continued="${page.continued}" data-part="${page.partIndex}">
+      ${eventPageTemplate(page, page.body, monthYear)}
+    </div>`;
+  });
+
+  newsletterPages.filter(page=>page.kind==='volunteer').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="volunteer" data-continued="${page.continued}" data-part="${page.partIndex}">
+      ${volunteerPageTemplate(page, page.bio, monthYear)}
+    </div>`;
+  });
+
+  newsletterPages.filter(page=>page.kind==='impact').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="impact" data-continued="${page.continued}" data-part="${page.partIndex}">
+      ${impactPageTemplate(page, page.story, monthYear)}
+    </div>`;
+  });
+
+  // OPPORTUNITIES — one page per measured set of items, never splitting one item.
+  newsletterPages.filter(page=>page.kind==='opportunities').forEach(page=>{
+    out += `
+    <div class="page" data-page-kind="opportunities" data-continued="${page.continued}" data-part="${page.partIndex}">
+      ${opportunitiesPageTemplate(monthYear, page.startIndex, page.items)}
+    </div>`;
+  });
+
+  // CLOSING
+  out += `
+  <div class="page" data-page-kind="closing">
+    ${closingPageTemplate(monthYear)}
   </div>`;
 
   document.getElementById('preview').innerHTML = out;
+  wrapPreviewPages();
 }
 
-function renderPreviewOnly(){ applyColors(); renderPreview(); }
-function renderAll(){ renderControls(); renderPreview(); applyColors(); }
+function wrapPreviewPages(){
+  const preview=document.getElementById('preview');
+  if(!preview) return;
+  preview.querySelectorAll(':scope > .page').forEach(page=>{
+    if(page.parentElement && page.parentElement.classList.contains('page-shell')) return;
+    const design=document.createElement('div');
+    design.className='page-design';
+    while(page.firstChild) design.appendChild(page.firstChild);
+    const shell=document.createElement('div');
+    shell.className='page-shell';
+    page.parentNode.insertBefore(shell,page);
+    shell.appendChild(page);
+    page.appendChild(design);
+  });
+}
+
+function applyPageMetrics(){
+  const a4WidthPx=PAGE_SIZE.widthIn * 96;
+  document.documentElement.style.setProperty('--design-scale', String(a4WidthPx / PREVIEW_WIDTH_PX));
+  document.documentElement.style.setProperty('--preview-scale', String(PREVIEW_WIDTH_PX / a4WidthPx));
+}
+function renderPreviewOnly(){ applyColors(); applyPageMetrics(); renderPreview(); }
+function renderAll(){ renderControls(); applyPageMetrics(); renderPreview(); applyColors(); }
 function render(){ renderAll(); }
 
 function hexToRgb(hex){
@@ -1148,10 +1613,13 @@ function hexToRgb(hex){
 
 // ---------- Exports ----------
 function validateExport(){
-  const model=buildNewsletterPageModel();
+  const model=paginateNewsletter(S, PAGE_SIZE);
   const warnings=[];
   if(!model.length) warnings.push('No newsletter pages were generated.');
   model.forEach((page,index)=>{
+    // Hard A4 assertion on every page in the model.
+    try{ assertA4Page(page); }
+    catch(error){ warnings.push(`Page ${index+1}: ${error.message}`); }
     if(page.kind==='cover'){
       if(!S.cover.banner) warnings.push('Page 1: cover banner image is missing.');
       if(!S.cover.feature) warnings.push('Page 1: cover feature image is missing.');
@@ -1159,19 +1627,27 @@ function validateExport(){
     if(page.kind==='event'){
       if(!(page.body||'').trim()) warnings.push(`Page ${index+1}: event text is empty.`);
       if(!page.continued && page.event && !page.event.img1) warnings.push(`Page ${index+1}: event image 1 is missing.`);
-      if((page.body||'').length > PAGE_BUDGET.event) warnings.push(`Page ${index+1}: event text exceeds the page budget.`);
     }
     if(page.kind==='volunteer'){
       if(!(page.bio||'').trim()) warnings.push(`Page ${index+1}: volunteer text is empty.`);
       if(page.showPhoto && !S.volunteer.photo) warnings.push(`Page ${index+1}: volunteer photo is missing.`);
-      if((page.bio||'').length > PAGE_BUDGET.volunteer) warnings.push(`Page ${index+1}: volunteer text exceeds the page budget.`);
     }
     if(page.kind==='impact'){
       if(!(page.story||'').trim()) warnings.push(`Page ${index+1}: impact story text is empty.`);
       if(page.showPhoto && !S.impact.photo) warnings.push(`Page ${index+1}: impact photo is missing.`);
-      if((page.story||'').length > PAGE_BUDGET.impact) warnings.push(`Page ${index+1}: impact text exceeds the page budget.`);
     }
   });
+  // Verify the live DOM matches the model and that nothing spills past A4.
+  if(typeof auditRenderedPages === 'function' && document.getElementById('preview')){
+    const rendered = document.querySelectorAll('#preview .page').length;
+    if(rendered && rendered !== model.length){
+      warnings.push(`Preview shows ${rendered} pages but the page model has ${model.length}.`);
+    }
+    auditRenderedPages().forEach(report => {
+      if(!report.isA4) warnings.push(`Page ${report.pageNumber}: rendered size is ${report.widthPt} x ${report.heightPt}pt, not A4 portrait.`);
+      if(report.clipped) warnings.push(`Page ${report.pageNumber}: content exceeds the A4 page by ${report.overflowPx} design px.`);
+    });
+  }
   if(warnings.length){
     warnings.forEach(message=>{ console.warn(message); if(typeof logAuto==='function') logAuto('⚠️ ' + message); });
   }
@@ -1187,6 +1663,8 @@ async function exportPDF(){
       return;
     }
     if(document.fonts && document.fonts.ready) await document.fonts.ready;
+    const preview=document.getElementById('preview');
+    if(preview) preview.classList.add('exporting');
     const pages = Array.from(document.querySelectorAll('#preview .page'));
     if(!pages.length) throw new Error('No newsletter pages found');
 
@@ -1227,6 +1705,8 @@ async function exportPDF(){
     console.error(error);
     alert('PDF export failed: ' + error.message);
   }finally{
+    const preview=(document && document.getElementById) ? document.getElementById('preview') : null;
+    if(preview) preview.classList.remove('exporting');
     if(btn) btn.textContent = '📄 Export PDF';
   }
 }
@@ -1237,7 +1717,7 @@ async function exportPPTX(){
   const btn=event && event.target ? event.target : null; if(btn) btn.textContent="⏳ Building...";
   try{
   const pptx = new PptxGenJS();
-  // The exported slide is the actual A4 template: 595.5pt x 842.25pt.
+  // The exported slide is the actual A4 template: 595.28pt x 841.89pt.
   // Legacy design coordinates are converted centrally below; the slide itself is never scaled.
   pptx.defineLayout({name:'A4', width:PAGE_SIZE.widthIn, height:PAGE_SIZE.heightIn});
   pptx.layout='A4';
@@ -1289,7 +1769,8 @@ async function exportPPTX(){
     try{ slide.addImage({data:src, x, y, w, h, sizing:{type:fit, w, h}}); }
     catch(error){ console.warn('PPTX image insertion failed:', error); }
   }
-  const newsletterPages = buildNewsletterPageModel();
+  // Single source of truth: the same A4 page model consumed by the preview and the PDF.
+  const newsletterPages = paginateNewsletter(S, PAGE_SIZE);
 
   // Cover
   let s = newPptxSlide(); s.background={color:B};
